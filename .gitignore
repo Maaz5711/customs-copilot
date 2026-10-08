@@ -1,0 +1,16 @@
+# secrets
+.env
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.egg-info/
+# raw originals stay local (FBR reuse terms unclear, files are large); see docs/sources.md
+data/raw/*
+!data/raw/.gitkeep
+# big generated artifacts
+data/processed/page_images/
+*.sqlite
+*.db
+.DS_Store

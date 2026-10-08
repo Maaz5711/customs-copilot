@@ -1,0 +1,7 @@
+{
+  "python.testing.pytestArgs": ["tests"],
+  "python.testing.pytestEnabled": true,
+  "git.autofetch": true,
+  "git.postCommitCommand": "push",
+  "git.confirmSync": false
+}
