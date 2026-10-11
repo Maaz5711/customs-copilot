@@ -16,3 +16,4 @@ data/processed/page_images/
 .DS_Store
 data/processed/cache/
 data/processed/logs/
+data/processed/review/*.html
