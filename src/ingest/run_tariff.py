@@ -15,6 +15,7 @@ OUT = Path("data/processed")
 # fiscal year -> (pdf name, valid_from, valid_to). Pakistan's FY runs 1 Jul to 30 Jun.
 TARIFFS = {
     "2026_27": ("20268251181330180Tariff-2026-27.pdf", "2026-07-01", "2027-06-30"),
+    "2025_26": ("20258111683941732Tariff-2025-26.pdf", "2025-07-01", "2026-06-30"),
 }
 
 
@@ -50,5 +51,7 @@ def run(fy: str):
 
 
 if __name__ == "__main__":
-    h, r, s = run("2026_27")
-    print(f"headings={len(h)} rows={len(r)} special={len(s)}")
+    import sys
+    for fy in (sys.argv[1:] or ["2026_27"]):
+        h, r, s = run(fy)
+        print(f"{fy}: headings={len(h)} rows={len(r)} special={len(s)}")

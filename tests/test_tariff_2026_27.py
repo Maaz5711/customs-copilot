@@ -51,3 +51,14 @@ def test_known_rows(parsed):
     assert by["1507.9000"]["cd_specific"] == {"amount": 11700.0, "unit": "MT"}
     assert by["8517.1310"]["cd_specific"] == {"amount": 250.0, "unit": "set"}
     assert by["3706.1000"]["cd_specific"] == {"amount": 5.0, "unit": "meter"}
+
+
+def test_tariff_2025_26_counts():
+    pdf = Path("data/raw") / run_tariff.TARIFFS["2025_26"][0]
+    if not pdf.exists():
+        pytest.skip("raw FY2025-26 tariff PDF not present")
+    headings, rows, special = run_tariff.run("2025_26")
+    assert len(headings) == 1017
+    assert len(rows) == 7590
+    assert len({r["code"] for r in rows}) == 7590
+    assert collections.Counter(r["cd_kind"] for r in rows) == {"plain": 7536, "specific": 54}
