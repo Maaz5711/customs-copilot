@@ -2,3 +2,4 @@ pdfplumber
 pymupdf
 pytest
 python-dotenv
+requests
