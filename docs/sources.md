@@ -43,3 +43,14 @@ Finance Act 2025, Finance Act 2026, Finance Bill 2025, Finance Bill 2026, Salien
 - Any amending SROs to 1151/1152 in FY2025-26 other than 1898 (Chrome sweep, item 2 of the prompt).
 - Customs duty concession SROs (for example CD exemptions): decision needed, see README scope note.
 - Ground-truth classification rulings (about 85) for evaluation: owner to supply.
+
+## Chrome sweep result, 2026-10-11 (reported by Claude in Chrome, not independently verified)
+- No SRO amended 1151(I)/2025 or 1152(I)/2025 during FY2025-26. Both stayed as issued until 30 Jun 2026, when
+  1063(I)/2026 (ACD) and 1064(I)/2026 (RD) replaced them. Method: FBR SRO database searched for "1151"/"1152" in all five
+  departments, plus the 57 Customs SROs dated 1 Jul 2025 to 30 Jun 2026 checked by title. Caveat: procedural SROs were
+  not all opened, so a duty change hidden in one cannot be fully ruled out.
+- Related SROs that touch these duties without amending them (not in `data/raw/` yet):
+  - 1386(I)/2025 (31 Jul 2025): Pakistan-Afghanistan Early Harvest Program, CD/ACD/RD exemptions 1 Aug 2025 to 31 Jul 2026.
+  - 1215(I)/2025 (8 Jul 2025): white sugar CD exemption with conditions; 1834(I)/2025 amends it. Both are concessions (out of v1 scope).
+- Already have: 1898(I)/2025 (40% RD used vehicles, in addition to 1152), superseded by 1065(I)/2026.
+- Still MISSING: SRO 297(I)/2023 and 370(I)/2024 (sales tax).
