@@ -36,14 +36,14 @@ HIER_COLS = """
 """
 
 HIER_CHECK = """
-    CHECK (
+    CHECK (COALESCE(
         (match_level = 'code8'    AND length(code_norm) = 8) OR
         (match_level = 'code6'    AND length(code_norm) = 6) OR
         (match_level = 'heading4' AND length(code_norm) = 4) OR
         (match_level = 'chapter2' AND length(code_norm) = 2) OR
         (match_level = 'all'      AND code_norm = '') OR
         (match_level = 'unmapped' AND code_norm IS NULL)
-    )
+    , 0))
 """
 
 RATE_COLS = """
@@ -56,7 +56,7 @@ RATE_COLS = """
 """
 
 RATE_CHECK = """
-    CHECK (
+    CHECK (COALESCE(
         (rate_kind = 'percent'     AND rate_pct IS NOT NULL AND rate_pct >= 0 AND rate_pct <= 100
                                    AND rate_specific_amount IS NULL) OR
         (rate_kind = 'specific'    AND rate_specific_amount IS NOT NULL AND rate_specific_amount >= 0
@@ -64,7 +64,7 @@ RATE_CHECK = """
         (rate_kind = 'conditional' AND rate_raw IS NOT NULL AND rate_pct IS NULL
                                    AND rate_specific_amount IS NULL) OR
         (rate_kind = 'exempt'      AND rate_pct IS NULL AND rate_specific_amount IS NULL)
-    )
+    , 0))
 """
 
 DDL = f"""
@@ -96,13 +96,13 @@ CREATE TABLE IF NOT EXISTS tariff_lines (
     {FACT_COLS},
     UNIQUE (fy, code, page),   -- Chapter 99 entries run over several pages (one row per page fragment)
     CHECK (length(code_norm) = level),
-    CHECK (
+    CHECK (COALESCE(
         (cd_kind = 'plain' AND cd_rate IS NOT NULL AND cd_rate >= 0 AND cd_rate <= 100
                            AND cd_specific_amount IS NULL) OR
         (cd_kind = 'specific' AND cd_specific_amount IS NOT NULL AND cd_specific_amount >= 0
                            AND cd_specific_unit IS NOT NULL AND cd_rate IS NULL) OR
         (cd_kind = 'compound' AND cd_raw IS NOT NULL)
-    )
+    , 0))
 );
 CREATE INDEX IF NOT EXISTS ix_tariff_lines_code ON tariff_lines (code_norm, valid_from, valid_to);
 
