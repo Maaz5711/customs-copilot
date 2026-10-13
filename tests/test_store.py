@@ -233,7 +233,7 @@ def test_counts_loaded(real):
     assert q("select count(*) from tariff_lines where fy='FY2026-27' and cd_kind='specific'") == 54
     assert q("select count(distinct s_no) from rd_rules where sro_number='1064(I)/2026'") == 687
     assert q("select count(distinct s_no) from rd_rules where sro_number='1152(I)/2025'") == 693
-    assert q("select count(*) from acd_rules") == 0
+    assert q("select count(*) from acd_rules") == 314
 
 
 @needs_data

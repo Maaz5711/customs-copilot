@@ -55,13 +55,18 @@ def test_chain_links_exist_and_663_rescinds_455_and_527():
 
 
 def test_sugar_chain_dates():
-    r = {x["rule_group"] + x["valid_from"]: x for x in rules() if x["rule_group"] in ("ST-SRO1217-SUGAR", "IT-9AD-SUGAR")}
-    st = r["ST-SRO1217-SUGAR2025-07-08"]
-    assert st["valid_to"] == "2025-11-30" and st["rate_pct"] == "0.25" and st["status"] == "accepted"
-    ext = r["ST-SRO1217-SUGAR2025-12-01"]
-    assert ext["valid_to"] == "2026-02-28" and ext["status"] == "needs_review"
-    it = r["IT-9AD-SUGAR2025-07-08"]
-    assert it["valid_to"] == "2025-11-30" and it["rate_pct"] == "0.25"
+    r = {x["rule_group"] + x["valid_from"]: x for x in rules() if x["rule_group"] in ("ST-SRO1217-SUGAR", "IT-9AD-SUGAR", "CU-1215-SUGAR")}
+    a = r["ST-SRO1217-SUGAR2025-07-08"]       # SRO 1217 as issued: cut-off 30 Sep 2025, window ends the day before SRO 1832 (22 Sep)
+    assert a["valid_to"] == "2025-09-21" and a["rate_pct"] == "0.25" and a["status"] == "accepted"
+    b = r["ST-SRO1217-SUGAR2025-09-22"]       # SRO 1832: 'September' -> 'November' (cut-off 30 Nov 2025)
+    assert b["valid_to"] == "2025-11-30" and b["status"] == "accepted"
+    c = r["ST-SRO1217-SUGAR2026-03-19"]       # SRO 527 issued 19 Mar 2026 (after its own cut-off), rescinded 22 Apr 2026
+    assert c["valid_to"] == "2026-04-21" and c["status"] == "needs_review" and "DOUBTFUL" in c["issues"]
+    d = r["ST-SRO1217-SUGAR2026-04-22"]
+    assert d["valid_to"] == "9999-12-31" and d["rate_kind"] == "conditional" and d["status"] == "needs_review"
+    assert (r["IT-9AD-SUGAR2025-07-08"]["valid_to"], r["IT-9AD-SUGAR2025-09-22"]["valid_to"]) == ("2025-09-21", "2025-11-30")
+    assert (r["CU-1215-SUGAR2025-07-08"]["valid_to"], r["CU-1215-SUGAR2025-09-22"]["valid_to"]) == ("2025-09-21", "2025-11-30")
+    assert not [k for k in r if k.startswith("CU-1215-SUGAR2025-12") or k.startswith("CU-1215-SUGAR2026")]   # no customs extension in data/raw
 
 
 def test_table2_is_local_supply_only_and_split_at_sro_1525():
