@@ -60,3 +60,19 @@ No mismatches found. Unsure rows below.
 - a3_st_sixth S.No 152 (electricity, tribal areas) ends 30 June 2026; check valid_to.
 - a3_sro rows 90-95: SRO 1525 prints no S.No/code rows; the hybrid vehicle carve-out is not in the parsed rows.
 - SRO 663(I)/2026 rescinds SRO 455 and 527, which affects the Dec 2025 to Feb 2026 sugar rows.
+
+## ACD sheet (spotcheck_a3_acd.csv): SRO 1063(I)/2026 and 1151(I)/2025
+
+These are AI readings of the page images (re-rendered at 200 dpi from the scans), NOT owner verification. 67 of 82 rows were read; the 15 rows on the owner's hand-check cards (`acd_15_cards.html`) were skipped on purpose.
+
+| Sheet | Rows read | match | mismatch | unsure |
+|---|---|---|---|---|
+| spotcheck_a3_acd | 67 | 67 | 0 | 0 |
+
+No mismatch and no unsure rows. Points worth knowing (all marked match):
+
+- Every listed code was found in the printed list under the cited clause with the stated percent. The 36 exception codes in 1063 (i)(a) and the 31 codes in 1063 (ii)(a)/(b)(i) were counted and agree with the store.
+- Page 2 row for 1063 clause (ii) (4% on slab 25% and higher): the rate sentence is printed at the bottom of page 1; only the exceptions start on page 2.
+- Heading codes 8703/8704 on the vehicle rows (clauses (ii)(b)(ii), (iv)(b), 3(x)) are a mapping of the printed words (cars, jeeps, LCV, heavy commercial vehicles); the headings themselves are not printed.
+- 1151 3(iii) lists Part III S.No 110 as excluded; 1063 3(iii) does not. The store matches both.
+- The CSV cells are cut at 80 characters, so the full parsed text of long rows was checked in `a3_acd_rules.json`.
