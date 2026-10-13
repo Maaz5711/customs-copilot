@@ -238,10 +238,31 @@ def write():
     return rows, issues
 
 
+def spotcheck(rows):
+    """Sheet for the owner: every non-code row (slab, regime, para 3, CKD) and about 15% of the code rows (seeded)."""
+    import random
+    rnd = random.Random(2026)
+    code_rows = [r for r in rows if r["match_level"] == "code8" and r["rate_kind"] == "percent"]
+    pick = {id(r) for r in rows if r not in code_rows}
+    pick |= {id(r) for r in rnd.sample(code_rows, k=max(1, round(len(code_rows) * 0.15)))}
+    out = [["page", "page_image", "clause", "pct_code", "rate", "correct? (Y/N)", "true_value_if_N"]]
+    for r in sorted((r for r in rows if id(r) in pick), key=lambda r: (r["sro_number"], r["page"], r["clause"], r["code_norm"])):
+        stem = Path(r["source_file"]).stem
+        what = r["code_norm"] or "(all codes)"
+        if r["rate_kind"] == "exempt":
+            rate = "not levied | " + (r["condition_text"] or "")[:90]
+        else:
+            rate = f"{r['rate_raw']} ({r['rate_pct']}%)" + (f" | {r['condition_text'][:70]}" if r["slab_pct"] else "")
+        out.append([r["page"], f"data/processed/page_images/{stem}/p{int(r['page']):03d}.png", f"{r['sro_number']} {r['clause']}", what, rate, "", ""])
+    with open(PROC / "spotcheck_a3_acd.csv", "w", newline="", encoding="utf-8") as f:
+        csv.writer(f).writerows(out)
+    return len(out) - 1
+
+
 if __name__ == "__main__":
     import collections
     r, i = write()
-    print(len(r), "rows;", len(i), "issues")
+    print(len(r), "rows;", len(i), "issues;", spotcheck(r), "spot-check rows")
     print(collections.Counter((x["sro_number"], x["rate_kind"], x["status"]) for x in r))
     for x in i:
         print(" -", x["sro_number"], x["clause"], x["issue"][:110])
