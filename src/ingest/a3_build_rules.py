@@ -23,6 +23,10 @@ STORE_COLS_IT.insert(3, "importer_category")
 ST_FILES = ["a3_st_sixth_schedule", "a3_st_sixth_table3", "a3_st_third_schedule", "a3_st_eighth_schedule", "a3_st_fifth_schedule",
             "a3_st_ninth_schedule", "a3_st_twelfth_schedule"]
 IT_FILES = ["a3_it_twelfth_schedule", "a3_it_s148_rates", "a3_it_s148_special_rules"]
+# Schedule rows that name goods only by description (no PCT code). The extractors marked them match_level 'all'
+# (empty prefix = every code). In the store that would make a Sixth Schedule exemption for, say, "Urine drainage bags"
+# match EVERY code, so they are stored as 'unmapped' (never matched by code, still searchable by text). Not a rate change.
+NO_CODE_GROUPS = {"ST-3RD", "ST-6TH-T1", "ST-6TH-T3", "ST-8TH-T1", "ST-12TH", "ST-12TH-EXCL", "ST-12TH-PROV"}
 ACT_NAME = {"ST": "Sales Tax Act 1990", "IT": "Income Tax Ordinance 2001"}
 
 
@@ -77,6 +81,10 @@ def to_store(r, tax, dropped, src):
     r["instrument"] = r.get("instrument") or f"{ACT_NAME[tax]}, {r['schedule_or_section']}"
     if not r.get("rule_group"):
         r["rule_group"] = src
+    info = []
+    if r["match_level"] == "all" and r["rule_group"] in NO_CODE_GROUPS:
+        r["match_level"] = "unmapped"
+        info.append("store: row names goods by description only; extractor said match_level=all (every code), stored as unmapped so it cannot match unrelated codes")
     if r["match_level"] == "unmapped":
         r["code_norm"] = ""
     r["except_codes"] = r.get("except_codes") or "[]"
@@ -86,7 +94,7 @@ def to_store(r, tax, dropped, src):
         if any(k in txt for k in ("locally manufactured", "local suppl", "if supplied locally", "supply of locally")):
             r["condition_text"] = "[LOCAL SUPPLY WORDING, probably not an import rule: lead's keyword flag, a human must confirm] " + (r.get("condition_text") or "")
             notes.append("flag: local-supply wording in description/condition")
-    iss = "; ".join(x for x in [r.get("issues", "")] + notes if x)
+    iss = "; ".join(x for x in [r.get("issues", "")] + notes + info if x)
     if notes:
         r["status"] = "needs_review"
     r["status"] = r["status"] if r["status"] in ("accepted", "needs_review", "verified") else "needs_review"

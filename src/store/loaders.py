@@ -40,12 +40,12 @@ SRO_FACTS = [
          supersedes="1151(I)/2025", validity_basis="clause",
          valid_from="2026-07-01", valid_to=OPEN_END,
          source_file="20266301763307131063-2026.pdf", page=2,
-         note="'shall take effect from the 1st day of July, 2026'. No end date printed. Rules not loaded yet (acd_rules empty)."),
+         note="'shall take effect from the 1st day of July, 2026'. No end date printed. ACD rules loaded from data/processed/a3_acd_rules.csv."),
     dict(sro_number="1151(I)/2025", instrument_kind="ACD", sro_date="2025-06-30",
          supersedes="929(I)/2024", validity_basis="clause",
          valid_from="2025-07-01", valid_to="2026-06-30",
          source_file="202572975414701SRO1151OF2025.pdf", page=2,
-         note="Effect from 1 Jul 2025; end date = day before SRO 1063(I)/2026 takes effect (superseded). Rules not loaded yet."),
+         note="Effect from 1 Jul 2025; end date = day before SRO 1063(I)/2026 takes effect (superseded). ACD rules loaded from data/processed/a3_acd_rules.csv."),
     dict(sro_number="1898(I)/2025", instrument_kind="RD", sro_date="2025-10-01",
          supersedes=None, validity_basis="date_line",
          valid_from="2025-10-01", valid_to="2026-06-29",
@@ -333,3 +333,78 @@ def load_table_file(conn: sqlite3.Connection, table: str, path: Path) -> int:
         raise
     conn.commit()
     return n
+
+
+# ------------------------------------------------------- A3 instruments (sales tax / income tax / concessions)
+
+# Concessions that have a printed end date but no 'valid_to' column in a3_instruments.csv (read from the SRO text).
+INSTRUMENT_END = {"1386(I)/2025": "2026-07-31"}   # SRO 1386 clause: 1 Aug 2025 to 31 Jul 2026 (page 1)
+
+
+def load_instruments(conn: sqlite3.Connection, path: Path | None = None) -> int:
+    """Add the non-RD/ACD notifications of data/processed/a3_instruments.csv to `sros`.
+
+    sro_status: rescinded / superseded come from the chain; 'amended' notifications are still in force.
+    A rescinded notification ends the day before the rescinding one takes effect.
+    Chain facts only; the rules themselves live in sales_tax_rules / income_tax_rules.
+    """
+    import datetime as dt
+    rows = list(csv.DictReader(open(path or PROC / "a3_instruments.csv", encoding="utf8", newline="")))
+    eff = {canon_sro(r["sro_number"]): r["effective_from"] for r in rows if re.search(r"\d+\s*\(I\)", r["sro_number"])}
+    have = {r[0] for r in conn.execute("SELECT sro_number FROM sros")}
+    cur = conn.cursor()
+    n = 0
+    for r in rows:
+        if r["tax"] not in ("ST", "IT", "ST+IT", "CUSTOMS") or not re.search(r"\d+\s*\(I\)", r["sro_number"]):
+            continue
+        num = canon_sro(r["sro_number"])
+        if num in have:
+            continue
+        status = {"rescinded": "rescinded", "superseded": "superseded"}.get(r["status"], "in_force")
+        by = canon_sro(r["superseded_by"]) if (status != "in_force" and r["superseded_by"]) else None
+        if status == "rescinded" and not by:   # a3_instruments lists the rescinding SRO in 'amended_or_superseded_by'? derive it
+            by = next((canon_sro(x["sro_number"]) for x in rows if num in [canon_sro(t) for t in re.findall(r"\d+\s*\(I\)\s*/\s*\d{4}", x["amends_or_supersedes"])]
+                       and "rescind" in x["effect"].lower()), None)
+        vt = OPEN_END
+        if by and by in eff:
+            vt = (dt.date.fromisoformat(eff[by]) - dt.timedelta(days=1)).isoformat()
+        if num in INSTRUMENT_END:
+            vt = INSTRUMENT_END[num]
+        basis = "clause" if r["effective_basis"].lower().startswith("clause") else "date_line"
+        kind = {"ST": "ST", "IT": "IT", "ST+IT": "OTHER", "CUSTOMS": "CD"}[r["tax"]]
+        note = f"{r['effect']}. {r['summary']}"[:900]
+        cur.execute(
+            "INSERT INTO sros (sro_number, instrument_kind, sro_date, supersedes, superseded_by, validity_basis,"
+            " sro_status, note, status, valid_from, valid_to, source_file, page) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (num, kind, r["issue_date"], r["amends_or_supersedes"] or None, by, basis, status, note,
+             "needs_review" if basis == "date_line" else "accepted", r["effective_from"], max(vt, r["effective_from"]),
+             r["source_file"], int(r["page"] or 1)),
+        )
+        n += 1
+    conn.commit()
+    return n
+
+
+# ------------------------------------------------------------------ A4 legal notes -> legal_notes table
+
+NOTES_EDITION = "HS2022 (edition of the FBR tariff PDF; applicability to FY2025-26 and FY2026-27 assumed, not proven)"
+NOTES_FROM, NOTES_TO = "2025-07-01", OPEN_END
+_KIND = {"gri": "general_rule", "gri_pakistan": "general_rule", "section_note": "section_note",
+         "chapter_note": "chapter_note", "subheading_note": "subheading_note"}
+
+
+def legal_notes_rows(path: Path | None = None) -> list[dict]:
+    """Map data/processed/legal_notes.json (A4 output) onto the legal_notes contract. No text is changed.
+
+    Dates: the notes carry no validity of their own. 2025-07-01 .. 9999-12-31 is a documented assumption
+    (first day of the earliest in-scope fiscal year, open end), written into hs_edition so no one reads it as proven.
+    """
+    data = json.loads((path or PROC / "legal_notes.json").read_text(encoding="utf8"))
+    out = []
+    for r in data:
+        scope = {"gri": "General Rules (GRI)", "gri_pakistan": "Pakistan Rules"}.get(r["kind"], r["section_or_chapter"])
+        out.append(dict(
+            note_kind=_KIND[r["kind"]], scope=scope, note_no=str(r["note_number"]), hs_edition=NOTES_EDITION,
+            text=r["text"], status="needs_review" if r.get("flags") else "accepted",
+            valid_from=NOTES_FROM, valid_to=NOTES_TO, source_file=r["source_file"], page=int(r["page"])))
+    return out

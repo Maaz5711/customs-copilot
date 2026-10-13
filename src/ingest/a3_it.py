@@ -818,7 +818,10 @@ def build_special():
                  in_scope=1, codes_in_clause="[]", snapshot_pages=f"{FY26}: p.649 (clause absent from the FY2025-26 file of 31.07.2025 and the 20.02.2026 file)")
         if tag == "D":
             row["snapshot"] = "both"
-        add_issue(row, "ambiguity: " + note)
+        if tag in ("A", "B"):      # read straight from the SRO pages: keep accepted, record the note only
+            row["issues"] = "note: " + note
+        else:
+            add_issue(row, "ambiguity: " + note)
         if tag == "C":
             add_issue(row, "ambiguity: consolidated text prints 28 Feb 2026 but footnote 4 says SRO 455 was rescinded by SRO 663 (22.04.2026); net cut-off is probably 30 Nov 2025 (SRO 1833) - confirm with FBR/owner")
         rows.append(row)

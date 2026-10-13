@@ -340,35 +340,59 @@ def sugar_rows():
               description="White crystalline sugar, import and subsequent supply, up to 500,000 metric tons, by TCP or private sector; minimum VAT 3% (Twelfth Schedule) exempted",
               condition_text="(i) import by Commerce Division through TCP or private sector, subject to conditions, limitations and quota allotments; (ii) Commerce Division ensures quality assurance through an international inspection firm; (iii) cut-off date for import to avail exemption.",
               schedule_or_section="SRO 1217(I)/2025", snapshot="FY2025-26", importer_status="any")
-    rows.append(mk(**st, valid_from="2025-07-08", valid_to="2025-11-30", date_basis="SRO 1217 date line 8 Jul 2025 to cut-off 30 Nov 2025 (30 Sep 2025 as issued, extended by SRO 1832 dated 22 Sep 2025)",
-                   source_file=F["1217"], page=1, clause="SRO 1217(I)/2025 preamble and condition (iii), as amended by SRO 1832(I)/2025 (page 1)", instrument="SRO 1217(I)/2025 as amended by SRO 1832(I)/2025",
-                   extraction_method="page image read by Claude", status="accepted"))
-    rows.append(mk(**st, valid_from="2025-12-01", valid_to="2026-02-28", date_basis="SRO 527(I)/2026 (19 Mar 2026) cut-off 28 Feb 2026; rescinded by SRO 663(I)/2026 (22 Apr 2026)",
-                   source_file=F["527"], page=1, clause="SRO 527(I)/2026 para 1; rescinded by SRO 663(I)/2026 paras (i)-(ii)", instrument="SRO 527(I)/2026 (rescinded)",
-                   extraction_method="page image read by Claude", status="needs_review",
-                   issues="DOUBTFUL WINDOW. SRO 527 (page image: dated 19 March 2026, 'in pursuance of the decision of the Federal Cabinet dated 4 Feb 2026') replaces the 30 Nov 2025 cut-off by 28 Feb 2026, but it was issued after BOTH dates and SRO 663(I)/2026 (22 Apr 2026) rescinded it 'with immediate effect'. Nothing in data/raw says whether imports between 1 Dec 2025 and 28 Feb 2026 got 0.25%, or what happens to them after the rescission. Stored as needs_review, never as an accepted rate. Owner question OQ-A3-3."))
-    # income tax
+    # Dated chain, same windows as the income tax clause (9AD) chain in a3_it.py. A window starts on the day its
+    # notification was issued (a notification cannot be in force before it exists) and ends the day before the next one.
+    # A, B are read straight from the SRO pages. C and D are doubtful and stay needs_review (see issues).
+    CUT = "cut-off date for import to avail the exemption: "
+    chain = [
+        ("A", "2025-07-08", "2025-09-21", "SRO 1217(I)/2025 date line 8 Jul 2025 (as issued, cut-off 30 Sep 2025)", F["1217"],
+         "SRO 1217(I)/2025 preamble and condition (iii) as issued", "SRO 1217(I)/2025", "accepted", "", CUT + "30th day of September, 2025"),
+        ("B", "2025-09-22", "2025-11-30", "SRO 1832(I)/2025 dated 22 Sep 2025: in condition (iii) 'September' replaced by 'November'; the day 30 is quoted by SRO 527(I)/2026 ('30th day of November, 2025')", F["1832"],
+         "SRO 1832(I)/2025 para 1 (amends SRO 1217(I)/2025 condition (iii))", "SRO 1217(I)/2025 as amended by SRO 1832(I)/2025", "accepted",
+         "note: SRO 1832 itself says only 'November'; the 30th comes from the quote in SRO 527(I)/2026.", CUT + "30th day of November, 2025"),
+        ("C", "2026-03-19", "2026-04-21", "SRO 527(I)/2026 dated 19 Mar 2026 (page image; Cabinet decision 4 Feb 2026): cut-off '28th day of February, 2026'; rescinded by SRO 663(I)/2026 on 22 Apr 2026", F["527"],
+         "SRO 527(I)/2026 para 1; rescinded by SRO 663(I)/2026 para (ii)", "SRO 527(I)/2026 (rescinded)", "needs_review",
+         "DOUBTFUL WINDOW. The new cut-off (28 Feb 2026) is a date BEFORE the SRO was issued, and the SRO was rescinded 'with immediate effect' on 22 Apr 2026. "
+         "Nothing in data/raw says whether imports of 1 Dec 2025 to 28 Feb 2026 got 0.25%. Window = issue date to the day before the rescission. Owner question OQ-A3-3.",
+         CUT + "28th day of February, 2026"),
+        ("D", "2026-04-22", OPEN, "SRO 663(I)/2026 dated 22 Apr 2026 rescinds SRO 527(I)/2026 'with immediate effect'", F["663"],
+         "SRO 663(I)/2026 para (ii)", "SRO 663(I)/2026 (rescission of SRO 527(I)/2026)", "needs_review",
+         "After the rescission the change of cut-off is gone, so the 30 Nov 2025 cut-off (SRO 1832) should apply and no new import qualifies for 0.25%. "
+         "Stored as a conditional row, not a rate; a human must confirm.", "(rescission; no cut-off text)"),
+    ]
+    for tag, vf, vt, basis, srcf, clause, instr, status, issues, cut in chain:
+        if tag == "D":
+            rr = dict(st, rate_kind="conditional", rate_pct="", rate_raw="reverts to the 30 Nov 2025 cut-off; no new import qualifies for 0.25% (see issues)")
+        else:
+            rr = dict(st)
+        rr["condition_text"] = st["condition_text"] + " | " + cut
+        rows.append(mk(**rr, valid_from=vf, valid_to=vt, date_basis=basis, source_file=srcf, page=1, clause=clause, instrument=instr,
+                       extraction_method="page image read by Claude", status=status, issues=issues))
+    # income tax: the clause (9AD) chain with the same windows is built in a3_it.py from the Ordinance text and the SRO pages
+    # (a3_it_s148_special_rules.csv, group IT-S148-REDUCED); nothing is duplicated here.
     it = dict(tax="IT", tax_kind="withholding", rule_group="IT-9AD-SUGAR", rate_kind="percent", rate_pct=0.25, rate_raw="0.25% of the value of commercial import",
               charged_on="value of commercial import of white crystalline sugar (Second Schedule Part II clause (9AD))", **unm,
               description="Withholding tax under section 148 on commercial import of white crystalline sugar up to 500,000 metric ton in aggregate",
               condition_text="(i) import through Commerce Division/TCP or private sector subject to quota; (ii) quality assurance by international inspection firm; (iii) cut-off date for import.",
               schedule_or_section="Second Schedule Part II clause (9AD) added by SRO 1216(I)/2025", snapshot="FY2025-26", importer_status="any")
-    rows.append(mk(**it, valid_from="2025-07-08", valid_to="2025-11-30", date_basis="SRO 1216 date line 8 Jul 2025 to cut-off 30 Nov 2025 (30 Sep 2025 as issued, changed by SRO 1833 dated 22 Sep 2025)",
-                   source_file=F["1216"], page=1, clause="SRO 1216(I)/2025 new clause (9AD) conditions (iii), as amended by SRO 1833(I)/2025", instrument="SRO 1216(I)/2025 as amended by SRO 1833(I)/2025",
+    rows.append(mk(**it, valid_from="2025-07-08", valid_to="2025-09-21", date_basis="SRO 1216 dated 8 Jul 2025 (owner confirmed the handwritten date), cut-off 30 Sep 2025 as issued",
+                   source_file=F["1216"], page=1, clause="SRO 1216(I)/2025 new clause (9AD) condition (iii) as issued", instrument="SRO 1216(I)/2025",
                    extraction_method="page image read by Claude", status="accepted"))
-    rows.append(mk(**it, valid_from="2025-12-01", valid_to="2026-02-28", date_basis="SRO 455(I)/2026 (5 Mar 2026) cut-off 28 Feb 2026; rescinded by SRO 663(I)/2026 (22 Apr 2026)",
-                   source_file=F["455"], page=1, clause="SRO 455(I)/2026 para 1; rescinded by SRO 663(I)/2026 para (i)", instrument="SRO 455(I)/2026 (rescinded)",
-                   extraction_method="page image read by Claude", status="needs_review",
-                   issues="DOUBTFUL WINDOW. SRO 455 (page image: dated 5 March 2026) replaces the 30 Nov 2025 cut-off by 28 Feb 2026, issued after the old cut-off and after the new one, and rescinded by SRO 663(I)/2026 (22 Apr 2026, 'with immediate effect'). The consolidated ITO (30.06.2026, p.649 footnotes 3-4) still prints '28th day of February 2026' next to a footnote that says 455 was rescinded: FBR's own consolidation is ambiguous. Stored as needs_review. Owner question OQ-A3-3."))
+    rows.append(mk(**it, valid_from="2025-09-22", valid_to="2025-11-30", date_basis="SRO 1833(I)/2025 dated 22 Sep 2025: 'September' replaced by 'November'",
+                   source_file=F["1833"], page=1, clause="SRO 1833(I)/2025 para 1 (amends SRO 1216(I)/2025 condition (iii))", instrument="SRO 1216(I)/2025 as amended by SRO 1833(I)/2025",
+                   extraction_method="page image read by Claude", status="accepted"))
     # customs sugar
     cu = dict(tax="CUSTOMS", tax_kind="customs_concession", rule_group="CU-1215-SUGAR", rate_kind="exempt", rate_raw="exempt from the whole of customs duties (up to 0.500 MMT)",
               **unm, description="White crystalline sugar falling under respective PCT codes, up to 0.500 MMT, exempt from the whole of customs duties",
               condition_text="(i) import through Commerce Division/TCP or private sector subject to quota; (ii) quality assurance by international inspection firm; (iii) cut-off date for import.",
               schedule_or_section="SRO 1215(I)/2025", snapshot="FY2025-26", importer_status="any")
-    rows.append(mk(**cu, valid_from="2025-07-08", valid_to="2025-11-30", date_basis="SRO 1215 date line 8 Jul 2025 to cut-off 30 Nov 2025 (30 Sep 2025 as issued, changed by SRO 1834 dated 22 Sep 2025)",
-                   source_file=F["1215"], page=1, clause="SRO 1215(I)/2025 preamble, condition (iii), as amended by SRO 1834(I)/2025", instrument="SRO 1215(I)/2025 as amended by SRO 1834(I)/2025",
+    rows.append(mk(**cu, valid_from="2025-07-08", valid_to="2025-09-21", date_basis="SRO 1215 date line 8 Jul 2025, cut-off 30 Sep 2025 as issued (page image read)",
+                   source_file=F["1215"], page=1, clause="SRO 1215(I)/2025 preamble and condition (iii) as issued", instrument="SRO 1215(I)/2025",
+                   extraction_method="page image read by Claude", status="accepted", issues="concession, out of v1 scope; not loaded into duty calculation"))
+    rows.append(mk(**cu, valid_from="2025-09-22", valid_to="2025-11-30", date_basis="SRO 1834(I)/2025 dated 22 Sep 2025: 'September' replaced by 'November' (page image read; file 20259221693431493SRO-1834-2025.pdf)",
+                   source_file=F["1834"], page=1, clause="SRO 1834(I)/2025 para 1 (amends SRO 1215(I)/2025 condition (iii))", instrument="SRO 1215(I)/2025 as amended by SRO 1834(I)/2025",
                    extraction_method="page image read by Claude", status="accepted",
-                   issues="concession, out of v1 scope; not loaded into duty calculation. Cut-off 30 Nov 2025 = SRO 1215 clause (iii) '30th day of September 2025' with 'September' replaced by 'November' by SRO 1834(I)/2025 dated 22 Sep 2025 (file 20259221693431493SRO-1834-2025.pdf p1, page image read). No customs extension after 30 Nov 2025 is in data/raw (SRO 663 rescinds 455 and 527 only), so no window is stored after that date."))
+                   issues="concession, out of v1 scope; not loaded into duty calculation. No customs extension after 30 Nov 2025 is in data/raw (SRO 663 rescinds SRO 455 and 527 only), so no later window is stored."))
     # 1386 Early Harvest Programme
     ahp = [("1", "07020000", "07020000", "Tomatoes", 3, 2, "", 0, 400000),
            ("2", "08061000", "08061000", "Grapes", 20, 6, "", 0, 230000),
