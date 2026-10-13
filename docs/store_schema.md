@@ -18,9 +18,11 @@ Shared columns: `status` in `accepted | needs_review | verified`.
 |---|---|---|
 | `tariff_headings` | fy, heading | 1,228 per FY (1,017 printed + 211 derived from code, see A1 fix) |
 | `tariff_lines` | fy, code, page | FY2026-27: 7,605 eight-digit + 56 Chapter 99 fragments; FY2025-26: 7,590 |
-| `sros` | sro_number | 6 (1064, 1152, 1063, 1151, 1898, 1065) |
+| `sros` | sro_number | 19 (6 RD/ACD SROs + 13 sales tax / income tax / customs notifications from `a3_instruments.csv`, incl. rescinded 455/527) |
 | `rd_rules` | one row per (SRO, S.No, code) | 1064: 698 rows from 687 S.Nos; 1152: 704 rows from 693 S.Nos |
-| `acd_rules`, `sales_tax_rules`, `income_tax_rules`, `legal_notes` | see contract | empty |
+| `acd_rules` | one row per code or slab/regime clause | 314 (1063: 184, 1151: 130) |
+| `sales_tax_rules`, `income_tax_rules` | see contract | 906 / 652 |
+| `legal_notes` | note_kind, scope, note_no, valid_from | 484 (dates assumed, label in `hs_edition`) |
 
 `tariff_lines`: `code` as printed, `code_norm` digits only, `level` 8 or 4 (Chapter 99), `cd_kind` `plain | specific | compound`, `cd_rate` (percent) or `cd_specific_amount` + `cd_specific_unit`, `cd_raw`, `rotated`, `note`.
 `rd_rules`: `sro_number`, `s_no`, `raw_pct_code`, `description`, `issues`, hierarchical columns, rate columns.
@@ -80,3 +82,11 @@ Rules for producers: `code_norm` is digits only (`"01012100"`, not `"0101.2100"`
 8. 1065(I)/2026 effective date (date line 30 Jun 2026 vs the "in addition to 1064" which starts 1 Jul 2026) is an open question.
 9. An RD row with the same code in different SROs with overlapping dates is expected only for the "in addition" SROs (not yet loaded as rules). When 1898/1065 rules are loaded they must use their own `rule_group`.
 10. Rows 25 (1064) and 24 (1152) listed in the `*_failures.csv` stay `needs_review` until the owner fills `owner_decision`; reloading after that is the intended path (the loader reads the CSV on each build).
+
+## A3 additions (see docs/a3_findings.md)
+- `acd_rules` slab convention: `condition_text` starts with `SLAB_EQ n` or `SLAB_GE n`; the caller compares n with the tariff CD of the code (a specific-rate line counts for `SLAB_GE`).
+  Not-levied clauses (para 3 of 1063/1151) are `rate_kind='exempt'`, one `rule_group` each (`<SRO>#3(x)`), so they are returned next to the levy rows.
+- Rows that name goods only by description are `match_level='unmapped'` (code_norm NULL): they never match a code lookup. `all` is only for true general rules.
+- `sros` also holds the sales tax / income tax / customs notifications of the sugar and SRO 297 chains (`load_instruments`); `rescinded` ends the day before the rescinding notification.
+- `legal_notes.hs_edition` carries the label "applicability to FY2025-26 and FY2026-27 assumed, not proven"; `valid_from` 2025-07-01, `valid_to` 9999-12-31.
+- Tariff headings: 1,228 per FY; 211 are derived from codes (`tariff_headings.text` may be empty, e.g. 11.03).
