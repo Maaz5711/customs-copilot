@@ -17,3 +17,6 @@ data/processed/page_images/
 data/processed/cache/
 data/processed/logs/
 data/processed/review/*.html
+
+# search index (rebuild with python -m src.search.build)
+data/processed/search_index/

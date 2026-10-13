@@ -3,3 +3,6 @@ pymupdf
 pytest
 python-dotenv
 requests
+rank-bm25
+fastembed
+numpy
