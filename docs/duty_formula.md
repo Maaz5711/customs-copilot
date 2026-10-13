@@ -110,3 +110,16 @@ different groups are cumulative and all come back. Rows still need a caller deci
   (p.226): all three are loaded with `valid_to = 2026-06-30`.
 - **Legal notes** (`legal_notes`) are the HS 2022 texts printed in the FBR tariff PDF. Their validity 2025-07-01 to 9999-12-31 is an assumption, stored in the
   `hs_edition` field as "applicability to FY2025-26 and FY2026-27 assumed, not proven". Cite by reference only (WCO Explanatory Notes are not copied).
+
+## 6. B3 additions (what `compute_duty` does, and what it found that this file had missed)
+* **Value addition tax (new, OPEN-10).** Sales Tax Act s.7A(2) and the Twelfth Schedule (PDF p.39 and p.225-226 of the 30.06.2026 file): "3% ad valorem" levied at import "in addition to the tax chargeable under section 3", on all taxable goods,
+  not charged on the exclusions of condition (2) (raw material and intermediate goods of a manufacturer for in-house use, Chapter 27 petroleum for a licensed OMC, registered service providers' in-house use, phones 8517.1419/8517.1430/8517.1390,
+  LNG, second-hand clothing 6309, gold and silver, Third Schedule goods taxed on retail price, plant and machinery of Chapters 84/85 imported by a manufacturer, motor cars up to 850cc, EV items until 30 Jun 2026). The Schedule names no base.
+  The tool takes it on V_ST and counts it as sales tax inside V_IT. This is a reading, not text of the law (OQ-B3-1).
+* **Order of the sales-tax rate (OPEN-3).** Exemption (Sixth Schedule) > Eighth Schedule (s.3(2)(a) says the Eighth Schedule rate replaces 18% for Third Schedule goods) > SRO 297(I)/2023 Table-I (25%; para 2 Explanation: not for Eighth Schedule goods) > standard 18% (s.3(1)).
+  Third Schedule goods change the BASE (retail price), not the rate. SRO 297 Table-II is a supply rule for locally made vehicles and is never applied to imports (section 5 above).
+* **Rounding (OPEN-5).** Convention only: half-up to 0.01 per line, rounded amounts feed the next base.
+* **Further tax (OPEN-4)** is reported but not added to the total.
+* **Used vehicles.** SRO 1898 (40%, 1 Oct 2025 to 29 Jun 2026) and SRO 1065 (30%, from 30 Jun 2026) are separate "in addition" lines on V, applied only when the caller says the import is a used-vehicle commercial import under the Import Policy Order clause (xvi).
+* **ACD slab.** SLAB_EQ n needs tariff CD = n; SLAB_GE n needs tariff CD >= n or a specific-rate line. Rows with an `except` list in the same SRO are carved out by the store before the slab test.
+Full list of inputs, statuses and limits: `docs/tools.md`.
