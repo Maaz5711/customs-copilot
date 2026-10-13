@@ -16,7 +16,7 @@ Shared columns: `status` in `accepted | needs_review | verified`.
 ## Tables
 | Table | Key | Loaded now |
 |---|---|---|
-| `tariff_headings` | fy, heading | 1,017 per FY |
+| `tariff_headings` | fy, heading | 1,228 per FY (1,017 printed + 211 derived from code, see A1 fix) |
 | `tariff_lines` | fy, code, page | FY2026-27: 7,605 eight-digit + 56 Chapter 99 fragments; FY2025-26: 7,590 |
 | `sros` | sro_number | 6 (1064, 1152, 1063, 1151, 1898, 1065) |
 | `rd_rules` | one row per (SRO, S.No, code) | 1064: 698 rows from 687 S.Nos; 1152: 704 rows from 693 S.Nos |

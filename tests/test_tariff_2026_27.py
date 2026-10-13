@@ -17,7 +17,7 @@ def parsed():
 
 def test_counts(parsed):
     headings, rows, special = parsed
-    assert len(headings) == 1017
+    assert len(headings) == 1228  # 1017 printed + 211 derived from code (see test_heading_matches_code)
     assert len(rows) == 7605
     assert len({r["code"] for r in rows}) == 7605  # no duplicate codes
     assert len(special) == 56  # Chapter 99 four-digit codes
@@ -58,7 +58,20 @@ def test_tariff_2025_26_counts():
     if not pdf.exists():
         pytest.skip("raw FY2025-26 tariff PDF not present")
     headings, rows, special = run_tariff.run("2025_26")
-    assert len(headings) == 1017
+    assert len(headings) == 1228  # 1017 printed + 211 derived from code (see test_heading_matches_code)
     assert len(rows) == 7590
     assert len({r["code"] for r in rows}) == 7590
     assert collections.Counter(r["cd_kind"] for r in rows) == {"plain": 7536, "specific": 54}
+
+
+def test_heading_matches_code(parsed):
+    """A1 bug: heading line 11.03 is not in the text layer, so 1103.xxxx carried 11.02."""
+    headings, rows, _ = parsed
+    assert all(r["heading"] == r["code"][:2] + "." + r["code"][2:4] for r in rows)
+    by = {h["heading"]: h for h in headings}
+    assert len(by) == len(headings)  # unique
+    assert by["11.03"]["derived_from_code"] is True
+    assert {r["heading"] for r in rows if r["code"].startswith("1103.")} == {"11.03"}
+    assert by["02.05"]["text"].startswith("Meat of horses")  # single-code heading, text from the code row
+    assert sum(1 for h in headings if h.get("derived_from_code")) == 211
+    assert {h["heading"] for h in headings} == {r["heading"] for r in rows}
