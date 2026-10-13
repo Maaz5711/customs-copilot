@@ -80,6 +80,21 @@ def sro_items(csv_path, with_issues):
     return items
 
 
+def a3_items(csv_path, failures):
+    """A3 sales tax / income tax sheets. Several rows can share a serial number, so ids carry the row number."""
+    items = []
+    for k, r in enumerate(csv.DictReader(open(csv_path, encoding="utf-8")), 1):
+        code = r.get("code_raw") if failures else r.get("pct_code")
+        rate = r.get("rate_raw") if failures else r.get("rate")
+        img = "../" + r["page_image"].replace("data/processed/", "")
+        line = (f"Page {r['page']}: S.No <b>{html.escape(r['s_no'])}</b>, code/goods <b>{html.escape(code or '')}</b>, "
+                f"rate/rule <b>{html.escape(rate or '')}</b>")
+        plain = f"p{r['page']} S.No {r['s_no']} code {code} rate {rate}"
+        items.append({"id": f"r{k}-p{r['page']}-s{r['s_no']}", "line": line, "plain": plain, "img": img,
+                      "why": html.escape(r.get("issues", "")) if failures else ""})
+    return items
+
+
 def tariff_items():
     pdf = Path("data/raw/20268251181330180Tariff-2026-27.pdf")
     out_dir = P / "page_images" / "tariff_2026_27"
@@ -109,8 +124,19 @@ if __name__ == "__main__":
     build("tariff_specific_duties", "Tariff 2026-27: specific duties (Rs. per unit)",
           "Find the code on the page image and check the Rs. amount and unit (the amount is written sideways in a narrow column).",
           tariff_items())
+    a3_pages = []
+    for f in sorted(P.glob("spotcheck_a3_*.csv")):
+        n = f.stem.replace("spotcheck_", "") + "_spotcheck"
+        build(n, f"A3 {f.stem.replace('spotcheck_a3_', '')}: 10% spot check (sales tax / income tax)",
+              "Find the row on the page image (S.No, code, rate, dates). If it matches the page click Matches; if not click Wrong and type what the page says.",
+              a3_items(f, False))
+        a3_pages.append(n)
+    for f in sorted(P.glob("a3_*_failures.csv")):
+        n = f.stem
+        build(n, f"A3 {f.stem[3:-9]}: flagged rows", how_fail, a3_items(f, True))
+        a3_pages.append(n)
     idx = "<h2>Review pages</h2><p>Open them in this order. Click the buttons, then press Save results.</p><ol>" + "".join(
         f'<li><a href="{f}.html">{f}</a></li>' for f in
-        ["sro_1152_rd_failures", "sro_1152_rd_spotcheck", "sro_1064_rd_failures", "sro_1064_rd_spotcheck", "tariff_specific_duties"]) + "</ol>"
+        ["sro_1152_rd_failures", "sro_1152_rd_spotcheck", "sro_1064_rd_failures", "sro_1064_rd_spotcheck", "tariff_specific_duties"] + a3_pages) + "</ol>"
     (REV / "index.html").write_text("<!doctype html><meta charset=utf-8><body style='font-family:system-ui;margin:30px'>" + idx, encoding="utf-8")
     print("built", sorted(x.name for x in REV.iterdir()))
