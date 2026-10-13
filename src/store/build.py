@@ -3,7 +3,7 @@ import argparse
 import json
 
 from .db import DEFAULT_DB_PATH, connect, init_db
-from .loaders import PROC, legal_notes_rows, load_instruments, load_rd, load_sros, load_table_file, load_tariff
+from .loaders import PROC, legal_notes_rows, load_instruments, load_rd, load_rd_used_vehicles, load_sros, load_table_file, load_tariff
 
 
 def build(db_path=DEFAULT_DB_PATH) -> dict:
@@ -16,6 +16,7 @@ def build(db_path=DEFAULT_DB_PATH) -> dict:
         report[key] = load_tariff(conn, key)
     report["rd_1064"] = load_rd(conn, "sro_1064_rd", "1064(I)/2026")
     report["rd_1152"] = load_rd(conn, "sro_1152_rd", "1152(I)/2025")
+    report["rd_used_vehicles"] = load_rd_used_vehicles(conn)
     report["a3_instruments"] = load_instruments(conn)
     report["acd_rules"] = load_table_file(conn, "acd_rules", PROC / "a3_acd_rules.csv")
     report["sales_tax_rules"] = load_table_file(conn, "sales_tax_rules", PROC / "a3_sales_tax_rules.csv")

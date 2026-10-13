@@ -30,12 +30,12 @@ SRO_FACTS = [
          supersedes="1152(I)/2025", validity_basis="clause",
          valid_from="2026-07-01", valid_to=OPEN_END,
          source_file="202663017637155381064-2026.pdf", page=30,
-         note="Clause 6: 'shall take effect from the 1st day of July, 2026'. No end date printed."),
+         note="Clause 6: 'shall take effect from the 1st day of July, 2026'. No end date printed (owner reading, owner_tasks T4: effective 1 Jul 2026, end none), so valid_to stays 9999-12-31."),
     dict(sro_number="1152(I)/2025", instrument_kind="RD", sro_date="2025-06-30",
          supersedes="928(I)/2024", validity_basis="clause",
          valid_from="2025-07-01", valid_to="2026-06-30",
          source_file="202572975650649SRO.1152of2025.pdf", page=39,
-         note="Clause 6: effect from 1 Jul 2025, 'shall remain in force till the 30th June, 2026'."),
+         note="Clause 6: effect from 1 Jul 2025, 'shall remain in force till the 30th June, 2026' (owner reading, owner_tasks T5: effective 1 Jul 2025, end 30 Jun 2026, as printed)."),
     dict(sro_number="1063(I)/2026", instrument_kind="ACD", sro_date="2026-06-30",
          supersedes="1151(I)/2025", validity_basis="clause",
          valid_from="2026-07-01", valid_to=OPEN_END,
@@ -50,12 +50,12 @@ SRO_FACTS = [
          supersedes=None, validity_basis="date_line",
          valid_from="2025-10-01", valid_to="2026-06-29",
          source_file="202510117101711806SRO-18982025.pdf", page=1,
-         note="No effective-date clause printed; start taken from the SRO date line. End = day before SRO 1065(I)/2026 date line. 40% RD on commercial used vehicles, in addition to 1152(I)/2025. Rules not loaded yet."),
+         note="no effective-date clause printed; date line used. Owner reading (owner_tasks T2): date line 1st October 2025, no start or end wording printed. End = day before SRO 1065(I)/2026 date line, because para 1 of 1065 says 'in supersession of ... S.R.O. 1898(I)/2025 dated 1st October, 2025' (Claude reading of the scan image, 1065 p.1). 40% RD on commercial used vehicles, in addition to 1152(I)/2025 (para 2). Rules loaded into rd_rules (rule_group 1898(I)/2025)."),
     dict(sro_number="1065(I)/2026", instrument_kind="RD", sro_date="2026-06-30",
          supersedes="1898(I)/2025", validity_basis="date_line",
          valid_from="2026-06-30", valid_to=OPEN_END,
          source_file="202663020651815SRO1065 (1).pdf", page=1,
-         note="No effective-date clause printed; start taken from the SRO date line (30 Jun 2026), although it is 'in addition to' 1064(I)/2026 which starts 1 Jul 2026. OPEN QUESTION. 30% RD on commercial used vehicles. Rules not loaded yet."),
+         note="no effective-date clause printed; date line used. Owner reading (owner_tasks T1): date line 30 June, 2026, no start or end wording printed. Para 2 makes it 'in addition to' 1064(I)/2026, which takes effect 1 Jul 2026, so 30 Jun 2026 itself is a one-day oddity (1152 still in force that day). 30% RD on commercial used vehicles. Rules loaded into rd_rules (rule_group 1065(I)/2026)."),
 ]
 # superseded_by is derived from `supersedes` at load time.
 
@@ -169,6 +169,21 @@ def parse_except(description: str) -> tuple[list[str], bool]:
     return toks, (len(toks) == 0)
 
 
+# 'Respective headings' rows: the code column names no code. Owner read the description on the page image
+# (owner_tasks T4/T5: S.No 686/692 = 'Plums (allocha)', S.No 687/693 = 'Cinematographic film'); the code is mapped by
+# description match to the tariff (Claude): 'Plums (allocha)' is the only such line in both tariffs (0813.4050);
+# 'Cinematographic film' is the description of heading 37.06 (3706.1000 and 3706.9000), so the rule is a heading rule.
+# Rate units checked on the page images (1064 p.29, 1152 p.38): 686 = 20.0 (percent), 692 = 28 (percent),
+# 687 = Rs.2400 per minute, 693 = Rs.3000 per minute.
+RESPECTIVE_MAP = {
+    ("1064(I)/2026", "686"): "0813.4050",
+    ("1064(I)/2026", "687"): "37.06",
+    ("1152(I)/2025", "692"): "0813.4050",
+    ("1152(I)/2025", "693"): "37.06",
+}
+RESPECTIVE_NOTE = "description read by owner, code mapped by description match to the tariff"
+
+
 def split_codes(raw: str) -> list[str]:
     """'8517.1390, 8517.1419' -> ['85171390','85171419']; '03.03' -> ['0303']; none -> []."""
     return [norm_code(t) for t in _ANY_CODE.findall(raw)]
@@ -220,7 +235,11 @@ def load_rd(conn: sqlite3.Connection, stem: str, sro_number: str, failures_csv: 
             matched_fail.add(key)
             counts["failures_matched"] += 1
         codes = split_codes(row["pct_code"])
-        if not codes:
+        mapped = (sro_number, str(row["s_no"]).strip()) in RESPECTIVE_MAP
+        if not codes and mapped:
+            codes = split_codes(RESPECTIVE_MAP[(sro_number, str(row["s_no"]).strip())])
+            counts["mapped_by_description"] = counts.get("mapped_by_description", 0) + 1
+        elif not codes:
             codes = [None]
             counts["unmapped"] += 1
         elif len(codes) > 1:
@@ -229,6 +248,9 @@ def load_rd(conn: sqlite3.Connection, stem: str, sro_number: str, failures_csv: 
         rf = _rate_fields(row)
         issues = list(row.get("issues") or [])
         review = failed or row.get("status") == "review"
+        if mapped:   # the only open issue on these rows was the missing code; owner read the description
+            issues = [i for i in issues if "Respective headings" not in i] + [RESPECTIVE_NOTE]
+            review = failed
         if rf["rate_kind"] == "conditional":
             issues.append("rate is conditional text, not a single number")
             counts["conditional"] += 1
@@ -269,6 +291,48 @@ def load_rd(conn: sqlite3.Connection, stem: str, sro_number: str, failures_csv: 
     return counts
 
 
+def load_rd_used_vehicles(conn: sqlite3.Connection) -> dict:
+    """RD rules of the two one-paragraph notifications 1898(I)/2025 (40%) and 1065(I)/2026 (30%).
+
+    Source: Claude vision readings in data/processed/sro_claude/*/p001.json (rate and text), cross-checked against
+    the page image. Four heading rows each (8702, 8703, 8704, 8711). The condition (commercial import of used
+    vehicles under clause (xvi) of S.No.10 of Appendix-C, Import Policy Order 2022) cannot be tested from the HS code,
+    so it is written into the description and the rows are needs_review (dates come from the date line).
+    Own rule_group = the SRO number, so these add to 1064/1152 and never replace them.
+    """
+    spec = [("1898(I)/2025", "202510117101711806SRO-18982025", 40.0),
+            ("1065(I)/2026", "202663020651815SRO1065_1", 30.0)]
+    cur = conn.cursor()
+    counts = {}
+    for sro_number, folder, rate in spec:
+        sro = conn.execute("SELECT * FROM sros WHERE sro_number = ?", (sro_number,)).fetchone()
+        if sro is None:
+            raise RuntimeError(f"load_sros first: {sro_number} missing")
+        data = json.loads((PROC / "sro_claude" / folder / "p001.json").read_text(encoding="utf8"))
+        r0 = data["rates"][0]
+        if float(r0["rate"]) != rate:
+            raise RuntimeError(f"{sro_number}: reading says {r0['rate']}, expected {rate}")
+        cur.execute("DELETE FROM rd_rules WHERE sro_number = ?", (sro_number,))
+        desc = ("Commercial import of used vehicles, imported under clause (xvi) of S.No.10 of the Table of "
+                "Appendix-C of the Import Policy Order, 2022, as per the condition stipulated therein; "
+                "in addition to the RD under the main RD notification")
+        for h in ("8702", "8703", "8704", "8711"):
+            cur.execute(
+                "INSERT INTO rd_rules (sro_number, s_no, raw_pct_code, description, clause, issues,"
+                " code_norm, match_level, except_codes, unparsed_except_text, rule_group,"
+                " rate_kind, rate_pct, rate_specific_amount, rate_specific_unit, rate_raw,"
+                " status, valid_from, valid_to, source_file, page)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (sro_number, "para 1", f"Heading {h}", desc, "para 1 (rate); para 2 (in addition)",
+                 "no effective-date clause printed; date line used. Condition (commercial used vehicles under the "
+                 "Import Policy Order) cannot be checked from the HS code: caller must ask. Rate read by vision model.",
+                 h, "heading4", "[]", 0, sro_number, "percent", rate, None, None, str(r0["rate"]),
+                 "needs_review", sro["valid_from"], sro["valid_to"], sro["source_file"], 1))
+        counts[sro_number] = 4
+    conn.commit()
+    return counts
+
+
 # ------------------------------------------------- generic CSV/JSON contract
 
 TABLE_COLUMNS = {
@@ -284,7 +348,7 @@ TABLE_COLUMNS = {
                          ["importer_status", "importer_category", "charged_on", "condition_text", "except_codes",
                           "unparsed_except_text", "rate_pct", "rate_specific_amount", "rate_specific_unit",
                           "rate_raw", "status"]),
-    "legal_notes": (["note_kind", "scope", "note_no", "text"], ["hs_edition", "status"]),
+    "legal_notes": (["note_kind", "scope", "note_no", "text"], ["hs_edition", "status", "table_json"]),
 }
 FACT = ["valid_from", "valid_to", "source_file", "page"]
 
@@ -320,10 +384,12 @@ def load_table_file(conn: sqlite3.Connection, table: str, path: Path) -> int:
                 vals["code_norm"] = ""  # 'all' = empty prefix; blank CSV cell is not NULL here
             if vals.get("code_norm") is not None:
                 vals["code_norm"] = str(vals["code_norm"])
+            if isinstance(vals.get("table_json"), (dict, list)):
+                vals["table_json"] = json.dumps(vals["table_json"], ensure_ascii=False)
             if isinstance(vals.get("except_codes"), list):
                 vals["except_codes"] = json.dumps(vals["except_codes"])
             vals = {k: v for k, v in vals.items() if not (v is None and k in ("except_codes", "status",
-                    "unparsed_except_text", "importer_status", "hs_edition"))}
+                    "unparsed_except_text", "importer_status", "hs_edition", "table_json"))}
             cols = list(vals)
             cur.execute(f"INSERT INTO {table} ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
                         [vals[c] for c in cols])
@@ -393,6 +459,10 @@ _KIND = {"gri": "general_rule", "gri_pakistan": "general_rule", "section_note": 
          "chapter_note": "chapter_note", "subheading_note": "subheading_note"}
 
 
+OWNER_OK_NOTES = [("chapter_note", "Chapter 74", "1"), ("subheading_note", "Chapter 74", "1"),
+                  ("subheading_note", "Chapter 78", "1")]
+
+
 def legal_notes_rows(path: Path | None = None) -> list[dict]:
     """Map data/processed/legal_notes.json (A4 output) onto the legal_notes contract. No text is changed.
 
@@ -407,4 +477,12 @@ def legal_notes_rows(path: Path | None = None) -> list[dict]:
             note_kind=_KIND[r["kind"]], scope=scope, note_no=str(r["note_number"]), hs_edition=NOTES_EDITION,
             text=r["text"], status="needs_review" if r.get("flags") else "accepted",
             valid_from=NOTES_FROM, valid_to=NOTES_TO, source_file=r["source_file"], page=int(r["page"])))
+    # structured tables (Claude reading of page images) and owner confirmations; the flattened text is kept as is
+    for t in json.loads((PROC / "legal_notes_tables.json").read_text(encoding="utf8")):
+        row = next(x for x in out if (x["note_kind"], x["scope"], x["note_no"]) == (t["note_kind"], t["scope"], t["note_no"]))
+        row["table_json"] = t["table_json"]
+        row["status"] = t["status"]
+    for key in OWNER_OK_NOTES:   # owner_tasks N365-Chapter74-1, N366-Chapter74-1, N376-Chapter78-1: answer 'ok'
+        row = next(x for x in out if (x["note_kind"], x["scope"], x["note_no"]) == key)
+        row["status"] = "verified"
     return out

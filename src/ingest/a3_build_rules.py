@@ -61,6 +61,13 @@ def fix_rate(r, notes):
     return r
 
 
+# Footnote-corrected codes (owner_tasks T3, owner reading + footnote 1 on ITO p.827). The table prints '5403.2010'
+# (typo); footnote 1 on the same page says 'The PCT Code 5503.2010 and entry relating thereto in column (2) inserted
+# through S.R.O. 1240(I)/2020 dated 20.11.2020', the row sits between 55.03 and 55.04, and 5503.2010 exists in the
+# tariff. rule_id -> (printed code, corrected code).
+CODE_CORRECTIONS = {"IT-12TH-P2-54032010-both": ("5403.2010", "5503.2010")}
+
+
 def to_store(r, tax, dropped, src):
     if r.get("in_scope") == "0":
         dropped.append((src, r.get("rule_id"), "in_scope=0 (expired before scope)"))
@@ -70,6 +77,15 @@ def to_store(r, tax, dropped, src):
         return None
     notes = []
     r = fix_rate(dict(r), notes)
+    corr = CODE_CORRECTIONS.get(r.get("rule_id"))
+    if corr:
+        printed, fixed = corr
+        r["code_norm"] = fixed.replace(".", "")
+        r["clause"] = r["clause"].replace(printed, fixed)
+        r["issues"] = "; ".join(x for x in [r.get("issues", ""),
+            f"corrected by footnote: table prints '{printed}' (typo), footnote 1 names {fixed}; owner chose {fixed} "
+            "(owner_tasks T3); 5503.2010 is in the tariff"] if x)
+        r["issues"] = r["issues"].replace(f"code_not_in_tariff: {printed.replace('.', '')} missing in tariff FY2025-26,FY2026-27; ", "")
     if tax == "ST":
         tk = (r.get("tax_kind") or "sales_tax")
         r["tax_kind"] = tk if tk in ("sales_tax", "further_tax", "extra_tax", "withholding") else "sales_tax"
