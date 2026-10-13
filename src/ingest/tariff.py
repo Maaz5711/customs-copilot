@@ -135,9 +135,20 @@ def parse_pages(pages: list[dict], source_file: str):
                 headings.append(cur_heading)
                 continue
             cd_plain, specific, kind = _clean_rate(cd_raw) if cd_raw else (None, None, "missing")
+            # A code's heading is its own first four digits. Some heading lines are
+            # not in the PDF text layer (11.03) or are merged into a single-code
+            # row (02.05 / 0205.0000), so the code is the authority, not the last
+            # heading line seen. Missing headings are added as derived entries.
+            code_heading = first[:2] + "." + first[2:4]
+            if cur_heading is None or cur_heading["heading"] != code_heading:
+                single = first.endswith("0000") and not desc.startswith("-")
+                cur_heading = {"heading": code_heading, "text": desc if single else "",
+                               "source_file": source_file, "page": page_no,
+                               "derived_from_code": True}
+                headings.append(cur_heading)
             rows.append({
                 "code": first,
-                "heading": cur_heading["heading"] if cur_heading else None,
+                "heading": code_heading,
                 "description": desc,
                 "cd_raw": cd_raw,
                 "cd_plain": cd_plain,

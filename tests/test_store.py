@@ -229,7 +229,7 @@ def test_counts_loaded(real):
     assert q("select count(*) from tariff_lines where fy='FY2026-27' and level=8") == 7605
     assert q("select count(distinct code_norm) from tariff_lines where fy='FY2026-27' and level=8") == 7605
     assert q("select count(*) from tariff_lines where fy='FY2025-26' and level=8") == 7590
-    assert q("select count(*) from tariff_headings where fy='FY2026-27'") == 1017
+    assert q("select count(*) from tariff_headings where fy='FY2026-27'") == 1228
     assert q("select count(*) from tariff_lines where fy='FY2026-27' and cd_kind='specific'") == 54
     assert q("select count(distinct s_no) from rd_rules where sro_number='1064(I)/2026'") == 687
     assert q("select count(distinct s_no) from rd_rules where sro_number='1152(I)/2025'") == 693
