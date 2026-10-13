@@ -54,7 +54,7 @@ COMMON = [
     "rate_specific_unit", "rate_raw", "condition_text", "charged_on", "valid_from", "valid_to", "date_basis",
     "snapshot", "footnote", "source_file", "page", "clause", "status", "issues", "extraction_method",
 ]
-EXTRA_A = ["twelfth_part", "snapshot_pages"]
+EXTRA_A = ["twelfth_part", "snapshot_pages", "row_index"]
 EXTRA_B = ["importer_category", "importer_status", "class_of_goods", "twelfth_part", "snapshot_pages"]
 EXTRA_C = ["clause_part", "in_scope", "codes_in_clause", "snapshot_pages"]
 
@@ -249,7 +249,7 @@ def build_twelfth():
             row = mk(EXTRA_A,
                      rule_id=f"{rid_base}-{'both' if both else ('26' if fy == FY26 else '25')}"
                              + (f"-{seen_ids[rid_base]}" if seen_ids[rid_base] > 1 else ""),
-                     schedule_or_section=f"Twelfth Schedule Part {part}", s_no=sn,
+                     schedule_or_section=f"Twelfth Schedule Part {part}", s_no="", row_index=sn,
                      description=e["description_full"], code_raw=re.sub(r"\s+", " ", e["code_cell"]).strip(),
                      code_norm=norm, match_level=ml,
                      except_codes=json.dumps(e["exc"]), unparsed_except_text=int(e["has_exc"] and not e["exc"]),
@@ -709,13 +709,15 @@ def build_special():
     p26 = pa if (pa and pb) else []
     p25 = locate(FY25, frag_a)
     row = mk(EXTRA_C, rule_id="IT-S53A-XREF-26", schedule_or_section="s.53A", s_no="s.53A(1)",
-             description=("Federal Government may reduce a withholding tax 'in the nature of minimum tax' in the First Schedule by one percentage point for persons or classes of persons "
-                          "on 'economic viability' grounds. s.148(7) calls the s.148 tax a minimum tax, so this may reach s.148 rates, but the text does not name s.148."),
-             match_level="all", rule_group="IT-S148-XREF", rate_kind="conditional", rate_raw="reduction of up to 1 percentage point by notification (none in data/raw)",
+             description=("Federal Government may reduce the rate of any withholding tax 'in the nature of minimum tax' in the First Schedule (other than s.113) "
+                          "'by one percent on the basis of economic viability' for persons or classes of persons. The text says 'by one percent' only; whether that means one "
+                          "percentage point or one percent of the rate is not stated, so it is not interpreted here. s.148(7) calls the s.148 tax a minimum tax, so this may reach s.148 rates, "
+                          "but the text does not name s.148."),
+             match_level="all", rule_group="IT-S148-XREF", rate_kind="conditional", rate_raw="reduction 'by one percent' by notification, on economic viability grounds (none in data/raw)",
              condition_text=frag, source_file=PDF[FY26], page=(p26 or [""])[0], valid_from="2026-07-01", valid_to=OPEN_END,
              date_basis="inserted by the Finance Act, 2026 (s.5(8), Act p.33); default effective 1 Jul 2026 (s.1(2)); absent from the FY2025-26 file",
-             snapshot=FY26, footnote="5[53A ...] Section 53A inserted by the Finance Act, 2026.", clause="Income Tax Ordinance 2001, section 53A (inserted by Finance Act 2026 s.5(8))",
-             extraction_method="text layer quote-check", clause_part="", in_scope=1, codes_in_clause="[]", snapshot_pages=f"{FY26}: p.{(p26 or ['?'])[0]}")
+             snapshot=FY26, footnote="5[53A ...] Section 53A inserted by the Finance Act, 2026.", clause=f"Income Tax Ordinance 2001, section 53A(1) (inserted by Finance Act 2026 s.5(8)); text starts p.{(pa or ['?'])[0]} and continues p.{(pb or ['?'])[0]}",
+             extraction_method="text layer quote-check", clause_part="", in_scope=1, codes_in_clause="[]", snapshot_pages=f"{FY26}: p.{(pa or ['?'])[0]}-{(pb or ['?'])[0]}")
     add_issue(row, "applicability_to_s148_not_stated: section names 'withholding taxes in the nature of minimum tax' in the First Schedule generally; no notification under it is in data/raw")
     if p25:
         add_issue(row, "unexpected: s.53A text found in FY2025-26 file")
@@ -872,7 +874,7 @@ def apply_vision(rows, key_by_fy):
             n_view += 1
             r["extraction_method"] = r["extraction_method"].replace("page image check", "page image CHECKED")
             for m in mm.get((fy, int(pg)), []):
-                if m.get("match") and m["match"] not in (r["code_raw"], r["s_no"], r["rule_id"]):
+                if m.get("match") and m["match"] not in (r["code_raw"], r["s_no"], r.get("row_index"), r["rule_id"]):
                     continue
                 add_issue(r, "vision_mismatch: " + m["note"])
     return n_view
@@ -923,7 +925,7 @@ def main():
         for tag, r in allrows:
             if r["issues"]:
                 key = FY25 if r["source_file"] == PDF[FY25] else FY26
-                w.writerow([r["page"], img_rel(key, int(r["page"])) if r["page"] != "" else "", r["s_no"], r["code_raw"], r["rate_raw"], r["issues"]])
+                w.writerow([r["page"], img_rel(key, int(r["page"])) if r["page"] != "" else "", r["s_no"] or ("row_index " + r.get("row_index", "")), r["code_raw"], r["rate_raw"], r["issues"]])
     sc = []
     import random
     rnd = random.Random(20260713)
@@ -953,7 +955,7 @@ def main():
             rate = r["rate_raw"] if t != "A" else f"{r['rate_raw']} | {r['description'][:70]}"
             if t == "B":
                 rate = f"{r['rate_raw']} | {r['importer_category']} | {r['snapshot']}"
-            w.writerow([pg, img_rel(key, pg) if pg != "" else "", r["s_no"], r["code_raw"] or r["clause"][:50], rate, "", ""])
+            w.writerow([pg, img_rel(key, pg) if pg != "" else "", r["s_no"] or ("row_index " + r.get("row_index", "")), r["code_raw"] or r["clause"][:50], rate, "", ""])
     print("A rows", len(A), "B rows", len(B), "C rows", len(C))
     print("flags A", dict(flagsA), "B", dict(flagsB), "C", dict(flagsC))
     print("rows with issues", sum(1 for _, r in allrows if r["issues"]), "spotcheck rows", len(sel),

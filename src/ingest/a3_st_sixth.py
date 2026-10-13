@@ -268,7 +268,7 @@ def pair_entries(s, cfg):
             d = head
         else:
             d = " | ".join(x for x in (head, item, tail) if x)
-        out.append(dict(tok=e[0], norm=e[1], lvl=e[2], desc=d, extra=[]))
+        out.append(dict(tok=e[0], norm=e[1], lvl=e[2], desc=d, extra=[], pg=pg, pos=(pg, round(y0))))
     # blank-code rows inside the inner table
     merged = []
     for pg, y0, txt in orphans:            # consecutive lines of one blank-code row
@@ -278,10 +278,13 @@ def pair_entries(s, cfg):
             merged.append((pg, y0, txt))
     for pg, y0, txt in merged:
         out.append(dict(tok="", norm="", lvl="all", desc=(head + " | " if head else "") + txt,
-                        extra=["code_cell_empty: inner-table row has no code printed in the source (page %d)" % pg]))
+                        extra=["code_cell_empty: inner-table row has no code printed in the source (page %d)" % pg],
+                        pg=pg, pos=(pg, round(y0))))
+    # De-duplicate on the printed POSITION as well: S.No 133 prints "Ingredients for pesticides / Respective headings"
+    # three times (footnotes 902, 904, 905); keying on text alone dropped two of them (A3 fix, found by the AI second read).
     seen, res = set(), []
     for o in out:
-        k = (o["norm"], o["lvl"], o["desc"])
+        k = (o["norm"], o["lvl"], o["desc"], o["pos"])
         if k not in seen:
             seen.add(k)
             res.append(o)
@@ -484,7 +487,7 @@ def build():
                     rate_raw="Exempt (Sixth Schedule Table-1; 'See section 13(1)')",
                     condition_text=cond, charged_on="",
                     valid_from=vf, valid_to=vt, date_basis=basis, snapshot=snap_label, footnote=fnt,
-                    source_file=src_file, page=pages[0],
+                    source_file=src_file, page=ent.get("pg", pages[0]),
                     clause="Sixth Schedule, Table-1, S.No %s, col 3 (entry %d of %d)%s" % (
                         k, i, len(ents),
                         "; FY2025-26 file %s p.%d" % (SNAPSHOTS['FY2025-26']['file'], alt["pages"][0]) if alt is not None else ""),
