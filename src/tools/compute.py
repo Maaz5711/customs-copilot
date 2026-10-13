@@ -392,6 +392,10 @@ def compute_duty(code, assessable_value_pkr, as_of_date, importer=None, quantity
             st_decision = ("percent", _pct(std[0]), std[0])
         else:
             bill.no("sales tax", "no sales tax rate row is valid on this date")
+    if c.startswith(PHONE_PREFIXES):
+        st_decision = None
+        bill.no("sales tax", "mobile phones: sales tax is set by Ninth Schedule Table-II (18% or 25% by C&F value band and CBU/CKD, plus the Twelfth Schedule exclusion). Those rows name no PCT code, so they cannot be matched to this tariff line",
+                "Which tariff lines are the Ninth Schedule Table-II columns CBU / CKD-SKD (8517.1310, 8517.1390, 8517.1411, 8517.1419)?")
     if st_decision and st_decision[0] in ("exempt", "zero") and third:
         bill.flag("also_a_Third_Schedule_item: exemption/zero rate applied, so the retail-price basis is not used (check the exemption row)")
         if st_decision[2]["status"] == "needs_review":
