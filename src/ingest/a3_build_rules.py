@@ -81,7 +81,7 @@ def to_store(r, tax, dropped, src):
         r["code_norm"] = ""
     r["except_codes"] = r.get("except_codes") or "[]"
     r["unparsed_except_text"] = r.get("unparsed_except_text") or 0
-    if tax == "ST" and r["rule_group"] != "ST-SRO297-T2":
+    if tax == "ST" and not r["rule_group"].startswith("ST-SRO297-T2"):
         txt = ((r.get("description") or "") + " " + (r.get("condition_text") or "")).lower()
         if any(k in txt for k in ("locally manufactured", "local suppl", "if supplied locally", "supply of locally")):
             r["condition_text"] = "[LOCAL SUPPLY WORDING, probably not an import rule: lead's keyword flag, a human must confirm] " + (r.get("condition_text") or "")

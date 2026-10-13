@@ -313,10 +313,20 @@ def sro297_t2_rows():
         rows.append(mk(**common, s_no=s, description=desc, code_raw=raw, code_norm=norm, condition_text="LOCAL SUPPLY ONLY (not an import rule). " + cond,
                        valid_from="2024-03-08", valid_to="2026-09-12", date_basis="SRO 370(I)/2024 date line 8 Mar 2024",
                        clause=f"SRO 297(I)/2023 Table-II S.No {s} as substituted by SRO 370(I)/2024", instrument="SRO 370(I)/2024"))
-        rows.append(mk(**{**common, "source_file": SRC1525, "snapshot": "FY2026-27"}, s_no=s, description=desc, code_raw=raw, code_norm=norm,
-                       condition_text="LOCAL SUPPLY ONLY (not an import rule). Proviso added by SRO 1525(I)/2026: 'the provisions of Table-II shall not apply to locally manufactured hybrid electric vehicles with engine capacity upto 2000cc'.",
-                       valid_from="2026-09-13", valid_to=OPEN, date_basis="SRO 1525(I)/2026 date line 13 Sep 2026, immediate effect (para 2)",
-                       clause=f"SRO 297(I)/2023 Table-II S.No {s} + proviso (SRO 1525(I)/2026 para 1)", instrument="SRO 1525(I)/2026"))
+        # From 13 Sep 2026 the same Table-II row carries the carve-out added by SRO 1525(I)/2026. The rate is still
+        # printed on SRO 370 (page 1), so that is the source of the row; SRO 1525 is cited in clause and condition.
+        rows.append(mk(**{**common, "snapshot": "FY2026-27"}, s_no=s, description=desc, code_raw=raw, code_norm=norm,
+                       condition_text="LOCAL SUPPLY ONLY (not an import rule). CARVE-OUT added by SRO 1525(I)/2026 para 1: 'the provisions of Table-II shall not apply to locally manufactured hybrid electric vehicles with engine capacity upto 2000cc'; so this 25% row does NOT apply to such hybrids (see the exempt row of group ST-SRO297-T2-1525-HYBRID).",
+                       valid_from="2026-09-13", valid_to=OPEN, date_basis="Rate and Table-II: SRO 370(I)/2024 (8 Mar 2024). Carve-out: SRO 1525(I)/2026 date line 13 Sep 2026, 'immediate effect' (para 2)",
+                       clause=f"SRO 297(I)/2023 Table-II S.No {s} (substituted by SRO 370(I)/2024), subject to the proviso added by SRO 1525(I)/2026 para 1",
+                       instrument="SRO 297(I)/2023 Table-II as substituted by SRO 370(I)/2024 and amended by SRO 1525(I)/2026"))
+    for raw, norm in (("87.03", "8703"), ("87.04", "8704")):
+        rows.append(mk(**{**common, "rule_group": "ST-SRO297-T2-1525-HYBRID", "rate_kind": "exempt", "rate_pct": "", "rate_raw": "Table-II does not apply",
+                          "source_file": SRC1525, "snapshot": "FY2026-27"}, s_no="proviso", description="Locally manufactured hybrid electric vehicles with engine capacity upto 2000cc: provisions of Table-II shall not apply",
+                       code_raw=raw, code_norm=norm,
+                       condition_text="LOCAL SUPPLY ONLY (not an import rule). Applies only to locally manufactured hybrid electric vehicles with engine capacity upto 2000cc. The SRO names no PCT code; the heading is taken from the Table-II rows it qualifies (87.03 / 87.04).",
+                       valid_from="2026-09-13", valid_to=OPEN, date_basis="SRO 1525(I)/2026 date line 13 Sep 2026, 'immediate effect' (para 2)",
+                       clause="SRO 1525(I)/2026 para 1: proviso added after Table-II of SRO 297(I)/2023", instrument="SRO 1525(I)/2026 (proviso to SRO 297(I)/2023 Table-II)"))
     return rows
 
 
@@ -336,7 +346,7 @@ def sugar_rows():
     rows.append(mk(**st, valid_from="2025-12-01", valid_to="2026-02-28", date_basis="SRO 527(I)/2026 (19 Mar 2026) cut-off 28 Feb 2026; rescinded by SRO 663(I)/2026 (22 Apr 2026)",
                    source_file=F["527"], page=1, clause="SRO 527(I)/2026 para 1; rescinded by SRO 663(I)/2026 paras (i)-(ii)", instrument="SRO 527(I)/2026 (rescinded)",
                    extraction_method="page image read by Claude", status="needs_review",
-                   issues="SRO 527 was issued on 19 Mar 2026, after the cut-off it replaced (30 Nov 2025) and after the new cut-off (28 Feb 2026), and was rescinded with immediate effect on 22 Apr 2026. Whether imports between 1 Dec 2025 and 28 Feb 2026 enjoyed 0.25% is a legal question; a human must decide."))
+                   issues="DOUBTFUL WINDOW. SRO 527 (page image: dated 19 March 2026, 'in pursuance of the decision of the Federal Cabinet dated 4 Feb 2026') replaces the 30 Nov 2025 cut-off by 28 Feb 2026, but it was issued after BOTH dates and SRO 663(I)/2026 (22 Apr 2026) rescinded it 'with immediate effect'. Nothing in data/raw says whether imports between 1 Dec 2025 and 28 Feb 2026 got 0.25%, or what happens to them after the rescission. Stored as needs_review, never as an accepted rate. Owner question OQ-A3-3."))
     # income tax
     it = dict(tax="IT", tax_kind="withholding", rule_group="IT-9AD-SUGAR", rate_kind="percent", rate_pct=0.25, rate_raw="0.25% of the value of commercial import",
               charged_on="value of commercial import of white crystalline sugar (Second Schedule Part II clause (9AD))", **unm,
@@ -349,7 +359,7 @@ def sugar_rows():
     rows.append(mk(**it, valid_from="2025-12-01", valid_to="2026-02-28", date_basis="SRO 455(I)/2026 (5 Mar 2026) cut-off 28 Feb 2026; rescinded by SRO 663(I)/2026 (22 Apr 2026)",
                    source_file=F["455"], page=1, clause="SRO 455(I)/2026 para 1; rescinded by SRO 663(I)/2026 para (i)", instrument="SRO 455(I)/2026 (rescinded)",
                    extraction_method="page image read by Claude", status="needs_review",
-                   issues="SRO 455 was issued on 5 Mar 2026, after the 30 Nov 2025 cut-off, and was rescinded on 22 Apr 2026. The consolidated ITO (30.06.2026, p.649 footnotes 3-4) still prints '28th day of February 2026' next to a footnote that says 455 was rescinded: FBR's own consolidation is ambiguous. A human must decide."))
+                   issues="DOUBTFUL WINDOW. SRO 455 (page image: dated 5 March 2026) replaces the 30 Nov 2025 cut-off by 28 Feb 2026, issued after the old cut-off and after the new one, and rescinded by SRO 663(I)/2026 (22 Apr 2026, 'with immediate effect'). The consolidated ITO (30.06.2026, p.649 footnotes 3-4) still prints '28th day of February 2026' next to a footnote that says 455 was rescinded: FBR's own consolidation is ambiguous. Stored as needs_review. Owner question OQ-A3-3."))
     # customs sugar
     cu = dict(tax="CUSTOMS", tax_kind="customs_concession", rule_group="CU-1215-SUGAR", rate_kind="exempt", rate_raw="exempt from the whole of customs duties (up to 0.500 MMT)",
               **unm, description="White crystalline sugar falling under respective PCT codes, up to 0.500 MMT, exempt from the whole of customs duties",
@@ -358,7 +368,7 @@ def sugar_rows():
     rows.append(mk(**cu, valid_from="2025-07-08", valid_to="2025-11-30", date_basis="SRO 1215 date line 8 Jul 2025 to cut-off 30 Nov 2025 (30 Sep 2025 as issued, changed by SRO 1834 dated 22 Sep 2025)",
                    source_file=F["1215"], page=1, clause="SRO 1215(I)/2025 preamble, condition (iii), as amended by SRO 1834(I)/2025", instrument="SRO 1215(I)/2025 as amended by SRO 1834(I)/2025",
                    extraction_method="page image read by Claude", status="accepted",
-                   issues="concession, out of v1 scope; not loaded into duty calculation"))
+                   issues="concession, out of v1 scope; not loaded into duty calculation. Cut-off 30 Nov 2025 = SRO 1215 clause (iii) '30th day of September 2025' with 'September' replaced by 'November' by SRO 1834(I)/2025 dated 22 Sep 2025 (file 20259221693431493SRO-1834-2025.pdf p1, page image read). No customs extension after 30 Nov 2025 is in data/raw (SRO 663 rescinds 455 and 527 only), so no window is stored after that date."))
     # 1386 Early Harvest Programme
     ahp = [("1", "07020000", "07020000", "Tomatoes", 3, 2, "", 0, 400000),
            ("2", "08061000", "08061000", "Grapes", 20, 6, "", 0, 230000),
