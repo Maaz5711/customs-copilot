@@ -52,3 +52,12 @@ In `data/processed/tariff_2026_27.csv`, codes 1103.1100, 1103.1300, 1103.1900 an
 3. Check the lists of sections and chapters without notes against the WCO HS 2022 text.
 4. Decide the validity dates for the notes (see above).
 5. Decide whether the Chapter 99 sub-chapter conditions (pp. 586-602) are in scope.
+
+## Owner decisions and table checks (owner_tasks-results.csv)
+- **Decision 1 (owner: yes):** notes are labelled "HS 2022 edition, applicability to FY2025-26 and FY2026-27 assumed, not proven" (as already stored in `hs_edition`).
+- **Decision 2 (owner: yes):** the Chapter 99 sub-chapter conditions (tariff pp.586-602) stay out of scope for v1.
+- **Owner "ok":** Chapter 74 note 1, Chapter 74 subheading note 1, Chapter 78 subheading note 1. These three are now `verified` (the only `verified` notes).
+- **Tables checked by Claude from the page images (not owner-verified)**, stored as structured `legal_notes.table_json` (source file `data/processed/legal_notes_tables.json`); the flattened `text` is kept unchanged:
+  - Chapter 11 note 2 (p.50): six cereals, starch 45% each, ash 2.5 / 3 / 5 / 2 / 1.6 / 4, sieve passage 80% at 315 micron (wheat and rye, barley, oats, rice, buckwheat) and 90% at 500 micron (maize and grain sorghum). The stored flattened text had the same values but an ambiguous column layout. `accepted`.
+  - Chapter 48 subheading note 1 (p.231): 115/393, 125/417, 200/637, 300/824, 400/961. Matches the stored text. `accepted`.
+  - Chapter 48 subheading note 2 (p.231): weights 60, 70, 80, 100, 115; tear MD 700, 830, 965, "12,30", 1,425; MD+CD 1,510 / 1,790 / 2,070 / 2,635 / 3,060; tensile cross 1.9 / 2.3 / 2.8 / 3.7 / 4.4; MD+CD 6 / 7.2 / 8.3 / 10.6 / 12.3. "12,30" is printed exactly so in the PDF (the owner's copy shows it too). `table_json` uses 1230 as the probable value and records the printed text under `source_typo`. Status stays `needs_review`.
