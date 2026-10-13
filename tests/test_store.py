@@ -246,16 +246,21 @@ def test_six_vehicle_codes_are_single_rows(real):
 
 @needs_data
 def test_failures_are_flagged_not_dropped(real):
+    """Every failure row stays in the store. Rows without an owner decision stay needs_review;
+    rows the owner confirmed are no longer flagged only because of the failures list."""
     c, _ = real
     import csv
     for stem, sro in [("sro_1064_rd", "1064(I)/2026"), ("sro_1152_rd", "1152(I)/2025")]:
         with open(PROC / f"{stem}_failures.csv", encoding="utf8", newline="") as f:
-            fails = [r for r in csv.DictReader(f) if not r["owner_decision"].strip()]
-        assert fails
-        for r in fails:
-            n = c.execute("select count(*) from rd_rules where sro_number=? and s_no=? and page=? "
-                          "and status='needs_review'", (sro, r["s_no"], int(r["page"]))).fetchone()[0]
-            assert n >= 1, (sro, r["s_no"])
+            rows = list(csv.DictReader(f))
+        for r in rows:
+            n = c.execute("select count(*) from rd_rules where sro_number=? and s_no=? and page=?",
+                          (sro, r["s_no"], int(r["page"]))).fetchone()[0]
+            assert n >= 1, (sro, r["s_no"])  # never dropped
+            if not r["owner_decision"].strip():
+                k = c.execute("select count(*) from rd_rules where sro_number=? and s_no=? and page=? "
+                              "and status='needs_review'", (sro, r["s_no"], int(r["page"]))).fetchone()[0]
+                assert k >= 1, (sro, r["s_no"])
 
 
 @needs_data
