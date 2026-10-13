@@ -73,14 +73,14 @@ Rules for producers: `code_norm` is digits only (`"01012100"`, not `"0101.2100"`
 
 ## Uncertainties (not resolved, flagged in the data)
 1. The except parser is text-based. A code listed after "except" is assumed to be an exclusion; phrases like "other than swimwear" are only flagged (`unparsed_except_text`: 14 rows in 1064, 17 in 1152). Spot-check some of the 73 / 65 rows with parsed except tokens.
-2. "Respective Headings" rows (1064 S.No 686/687, 1152 S.No 692/693) are loaded `unmapped` + `needs_review`; they match no code until mapped by hand.
+2. "Respective Headings" rows are now mapped (owner read the descriptions): 686/692 Plums (allocha) -> 0813.4050, 687/693 Cinematographic film -> heading 3706; `accepted`.
 3. 1102.9000 appears under S.No 109 and 110 in both RD SROs (Maida, Semolina) and is not in the 2026-27 tariff. Both rows are kept; lookups return both, flagged.
 4. 1152 S.No 511 (8433.5100) has an age-conditional rate; stored as `conditional`.
 5. Tariff specific duties from rotated cells (48 rows in each year) are `needs_review`: the scale (Rs.10550/MT) is reassembled from wrapped text. Chapter 99 entries with a blank or odd duty cell ("", "0 0"; 7 rows) are stored as `compound` with the printed text and `needs_review`.
 6. Chapter 99 entries span pages; the parser produced 56 fragments for 42 codes, kept as one row per page (`UNIQUE(fy, code, page)`).
 7. The 6 "duplicate" vehicle codes are not duplicates (A1 finding, re-checked by a test): one table row each; the other hits were mentions in notes.
-8. 1065(I)/2026 effective date (date line 30 Jun 2026 vs the "in addition to 1064" which starts 1 Jul 2026) is an open question.
-9. An RD row with the same code in different SROs with overlapping dates is expected only for the "in addition" SROs (not yet loaded as rules). When 1898/1065 rules are loaded they must use their own `rule_group`.
+8. 1065(I)/2026 has no effective-date wording (owner read it): date line 30 Jun 2026 is used, `needs_review`. It is "in addition to" 1064, which starts 1 Jul 2026.
+9. An RD row with the same code in different SROs with overlapping dates is expected only for the "in addition" SROs (not yet loaded as rules). 1898/1065 rules are loaded (4 heading rows each) with their own `rule_group`.
 10. Rows 25 (1064) and 24 (1152) listed in the `*_failures.csv` stay `needs_review` until the owner fills `owner_decision`; reloading after that is the intended path (the loader reads the CSV on each build).
 
 ## A3 additions (see docs/a3_findings.md)
@@ -90,3 +90,4 @@ Rules for producers: `code_norm` is digits only (`"01012100"`, not `"0101.2100"`
 - `sros` also holds the sales tax / income tax / customs notifications of the sugar and SRO 297 chains (`load_instruments`); `rescinded` ends the day before the rescinding notification.
 - `legal_notes.hs_edition` carries the label "applicability to FY2025-26 and FY2026-27 assumed, not proven"; `valid_from` 2025-07-01, `valid_to` 9999-12-31.
 - Tariff headings: 1,228 per FY; 211 are derived from codes (`tariff_headings.text` may be empty, e.g. 11.03).
+- `legal_notes.table_json` (nullable, json_valid): structured table of a note whose flattened `text` is ambiguous (Chapter 11 note 2, Chapter 48 subheading notes 1 and 2); `text` is kept unchanged. Source: `data/processed/legal_notes_tables.json`.
