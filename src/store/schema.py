@@ -190,6 +190,7 @@ CREATE TABLE IF NOT EXISTS legal_notes (
     note_no TEXT NOT NULL,
     hs_edition TEXT NOT NULL DEFAULT 'HS2022',
     text TEXT NOT NULL,
+    table_json TEXT CHECK (table_json IS NULL OR json_valid(table_json)),  -- structured table of the note; `text` keeps the flattened original
     {STATUS_COL},
     {FACT_COLS},
     UNIQUE (note_kind, scope, note_no, valid_from)
