@@ -316,6 +316,10 @@ def load_table_file(conn: sqlite3.Connection, table: str, path: Path) -> int:
             if missing or extra:
                 raise ValueError(f"{path.name} row {i}: missing columns {missing}, unknown columns {extra}")
             vals = {k: (None if (isinstance(v, str) and v.strip() == "") else v) for k, v in r.items()}
+            if vals.get("match_level") == "all" and vals.get("code_norm") is None:
+                vals["code_norm"] = ""  # 'all' = empty prefix; blank CSV cell is not NULL here
+            if vals.get("code_norm") is not None:
+                vals["code_norm"] = str(vals["code_norm"])
             if isinstance(vals.get("except_codes"), list):
                 vals["except_codes"] = json.dumps(vals["except_codes"])
             vals = {k: v for k, v in vals.items() if not (v is None and k in ("except_codes", "status",
