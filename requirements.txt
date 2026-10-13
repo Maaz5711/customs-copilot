@@ -6,4 +6,4 @@ requests
 rank-bm25
 fastembed
 numpy
-mcp
+mcp>=2.3

@@ -17,6 +17,7 @@ def _kind_block(table, kind, app, exc, extra_flags=None):
         if extra_flags:
             v["flags"].extend(extra_flags(r))
         views.append(v)
+    exc = sorted(exc, key=lambda x: x[1].startswith("not_in_force_on_date"))  # reasons about the code first, date-only last
     ex = [excluded_view(table, r, why, kind) for r, why in exc]
     return {"applicable": views, "excluded": ex[:MAX_EXCLUDED], "excluded_total": len(ex)}
 
