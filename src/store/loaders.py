@@ -1,0 +1,331 @@
+"""Loaders: parsed JSON/CSV from data/processed/ -> SQLite legal store.
+
+Nothing is silently fixed. Rows that failed validation upstream are loaded with
+status='needs_review'; a database constraint violation aborts the whole load.
+"""
+from __future__ import annotations
+
+import csv
+import json
+import re
+import sqlite3
+from pathlib import Path
+
+from .resolve import canon_sro, norm_code
+from .schema import OPEN_END
+
+ROOT = Path(__file__).resolve().parents[2]
+PROC = ROOT / "data" / "processed"
+
+FY_META = {
+    "tariff_2026_27": "FY2026-27",
+    "tariff_2025_26": "FY2025-26",
+}
+
+# Facts about the SROs loaded now. Dates are read from the printed clauses
+# (see docs/store_schema.md "SRO dates"). page = page carrying the effective/validity clause
+# (or the date line when validity_basis = 'date_line').
+SRO_FACTS = [
+    dict(sro_number="1064(I)/2026", instrument_kind="RD", sro_date="2026-06-30",
+         supersedes="1152(I)/2025", validity_basis="clause",
+         valid_from="2026-07-01", valid_to=OPEN_END,
+         source_file="202663017637155381064-2026.pdf", page=30,
+         note="Clause 6: 'shall take effect from the 1st day of July, 2026'. No end date printed."),
+    dict(sro_number="1152(I)/2025", instrument_kind="RD", sro_date="2025-06-30",
+         supersedes="928(I)/2024", validity_basis="clause",
+         valid_from="2025-07-01", valid_to="2026-06-30",
+         source_file="202572975650649SRO.1152of2025.pdf", page=39,
+         note="Clause 6: effect from 1 Jul 2025, 'shall remain in force till the 30th June, 2026'."),
+    dict(sro_number="1063(I)/2026", instrument_kind="ACD", sro_date="2026-06-30",
+         supersedes="1151(I)/2025", validity_basis="clause",
+         valid_from="2026-07-01", valid_to=OPEN_END,
+         source_file="20266301763307131063-2026.pdf", page=2,
+         note="'shall take effect from the 1st day of July, 2026'. No end date printed. Rules not loaded yet (acd_rules empty)."),
+    dict(sro_number="1151(I)/2025", instrument_kind="ACD", sro_date="2025-06-30",
+         supersedes="929(I)/2024", validity_basis="clause",
+         valid_from="2025-07-01", valid_to="2026-06-30",
+         source_file="202572975414701SRO1151OF2025.pdf", page=2,
+         note="Effect from 1 Jul 2025; end date = day before SRO 1063(I)/2026 takes effect (superseded). Rules not loaded yet."),
+    dict(sro_number="1898(I)/2025", instrument_kind="RD", sro_date="2025-10-01",
+         supersedes=None, validity_basis="date_line",
+         valid_from="2025-10-01", valid_to="2026-06-29",
+         source_file="202510117101711806SRO-18982025.pdf", page=1,
+         note="No effective-date clause printed; start taken from the SRO date line. End = day before SRO 1065(I)/2026 date line. 40% RD on commercial used vehicles, in addition to 1152(I)/2025. Rules not loaded yet."),
+    dict(sro_number="1065(I)/2026", instrument_kind="RD", sro_date="2026-06-30",
+         supersedes="1898(I)/2025", validity_basis="date_line",
+         valid_from="2026-06-30", valid_to=OPEN_END,
+         source_file="202663020651815SRO1065 (1).pdf", page=1,
+         note="No effective-date clause printed; start taken from the SRO date line (30 Jun 2026), although it is 'in addition to' 1064(I)/2026 which starts 1 Jul 2026. OPEN QUESTION. 30% RD on commercial used vehicles. Rules not loaded yet."),
+]
+# superseded_by is derived from `supersedes` at load time.
+
+
+# --------------------------------------------------------------------- tariff
+
+def load_tariff(conn: sqlite3.Connection, key: str, path: Path | None = None) -> dict:
+    """Load tariff_2026_27 or tariff_2025_26 JSON. Idempotent per fy."""
+    fy = FY_META[key]
+    data = json.loads((path or PROC / f"{key}.json").read_text(encoding="utf8"))
+    cur = conn.cursor()
+    cur.execute("DELETE FROM tariff_lines WHERE fy = ?", (fy,))
+    cur.execute("DELETE FROM tariff_headings WHERE fy = ?", (fy,))
+    n_head = n_lines = n_special = n_review = 0
+    for h in data["headings"]:
+        cur.execute(
+            "INSERT INTO tariff_headings (fy, heading, text, valid_from, valid_to, source_file, page)"
+            " VALUES (?,?,?,?,?,?,?)",
+            (fy, h["heading"], h["text"], h["valid_from"], h["valid_to"], h["source_file"], h["page"]),
+        )
+        n_head += 1
+
+    def insert(r, level, special):
+        nonlocal n_review
+        kind = r.get("cd_kind", "plain")
+        spec = r.get("cd_specific")
+        note = None
+        status = "accepted"
+        if special:
+            raw0 = (r.get("cd_raw") or "").strip()
+            if raw0 == "0":
+                kind, rate, amt, unit = "plain", 0.0, None, None
+            else:  # blank or odd cell text: keep as printed, do not guess
+                kind, rate, amt, unit = "compound", None, None, None
+                status = "needs_review"
+                r = dict(r, cd_raw=raw0)
+            note = "Chapter 99 special-purpose entry; text may continue on adjacent pages (one row per page fragment)"
+        elif kind == "plain":
+            rate, amt, unit = r["cd_plain"], None, None
+        else:
+            rate, amt, unit = None, spec["amount"], spec["unit"]
+        if r.get("rotated") and kind == "specific":
+            status = "needs_review"
+            note = ("Rotated specific-duty cell; amount reassembled from wrapped text "
+                    "(e.g. 'Rs.10550/MT'). Scale is an inference, owner must confirm on the spot-check sheet.")
+        if status == "needs_review":
+            n_review += 1
+        cur.execute(
+            "INSERT INTO tariff_lines (fy, code, code_norm, level, heading, description, cd_kind, cd_rate,"
+            " cd_specific_amount, cd_specific_unit, cd_raw, rotated, note, status,"
+            " valid_from, valid_to, source_file, page) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (fy, r["code"], norm_code(r["code"]), level, r.get("heading"), r["description"], kind, rate,
+             amt, unit, r.get("cd_raw"), 1 if r.get("rotated") else 0, note, status,
+             r["valid_from"], r["valid_to"], r["source_file"], r["page"]),
+        )
+
+    for r in data["rows"]:
+        insert(r, 8, False)
+        n_lines += 1
+    for r in data.get("special", []):
+        insert(r, 4, True)
+        n_special += 1
+    conn.commit()
+    return dict(fy=fy, headings=n_head, lines8=n_lines, special4=n_special, needs_review=n_review)
+
+
+# ----------------------------------------------------------------------- SROs
+
+def load_sros(conn: sqlite3.Connection, facts=None) -> int:
+    facts = facts or SRO_FACTS
+    sup_by = {f["supersedes"]: f["sro_number"] for f in facts if f.get("supersedes")}
+    cur = conn.cursor()
+    for f in facts:
+        by = sup_by.get(f["sro_number"])
+        cur.execute(
+            "INSERT OR REPLACE INTO sros (sro_number, instrument_kind, sro_date, supersedes, superseded_by,"
+            " validity_basis, sro_status, note, status, valid_from, valid_to, source_file, page)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (f["sro_number"], f["instrument_kind"], f["sro_date"], f.get("supersedes"), by,
+             f["validity_basis"], "superseded" if by else "in_force", f.get("note"),
+             "needs_review" if f["validity_basis"] == "date_line" else "accepted",
+             f["valid_from"], f["valid_to"], f["source_file"], f["page"]),
+        )
+    conn.commit()
+    return len(facts)
+
+
+# ------------------------------------------------------------------------- RD
+
+_EXC_KW = re.compile(r"\b(except|excepting|excluding|other than)\b", re.I)
+_ANY_CODE = re.compile(r"\d{4}\.\d{4}|(?<![\d.])\d{2}\.\d{2}(?!\d|\.\d)")
+
+
+def parse_except(description: str) -> tuple[list[str], bool]:
+    """Return (except tokens as digit strings, unparsed_text_flag).
+
+    Tokens are the 8-digit codes and 4-digit headings printed AFTER the first
+    except/excluding/other-than keyword. If a keyword is present but no code follows
+    (e.g. 'other than swimwear'), the row carries a free-text qualifier the store cannot
+    evaluate: flag=True and nothing is guessed.
+    """
+    m = _EXC_KW.search(description)
+    if not m:
+        return [], False
+    tail = description[m.start():]
+    toks = []
+    for t in _ANY_CODE.findall(tail):
+        n = norm_code(t)
+        if n not in toks:
+            toks.append(n)
+    return toks, (len(toks) == 0)
+
+
+def split_codes(raw: str) -> list[str]:
+    """'8517.1390, 8517.1419' -> ['85171390','85171419']; '03.03' -> ['0303']; none -> []."""
+    return [norm_code(t) for t in _ANY_CODE.findall(raw)]
+
+
+def _rate_fields(row: dict) -> dict:
+    raw = str(row["rate"]).strip()
+    spec = row.get("rate_specific")
+    if spec:
+        return dict(rate_kind="specific", rate_pct=None, rate_specific_amount=float(spec["amount"]),
+                    rate_specific_unit=spec["unit"], rate_raw=raw)
+    try:
+        return dict(rate_kind="percent", rate_pct=float(raw), rate_specific_amount=None,
+                    rate_specific_unit=None, rate_raw=raw)
+    except ValueError:
+        return dict(rate_kind="conditional", rate_pct=None, rate_specific_amount=None,
+                    rate_specific_unit=None, rate_raw=raw)
+
+
+def _failure_keys(csv_path: Path) -> set[tuple[str, int]]:
+    """(s_no, page) of unresolved failures: owner_decision blank."""
+    out = set()
+    with open(csv_path, encoding="utf8", newline="") as f:
+        for r in csv.DictReader(f):
+            if not (r.get("owner_decision") or "").strip():
+                out.add((str(r["s_no"]).strip(), int(r["page"])))
+    return out
+
+
+def load_rd(conn: sqlite3.Connection, stem: str, sro_number: str, failures_csv: Path | None = None,
+            path: Path | None = None) -> dict:
+    """Load sro_1064_rd / sro_1152_rd. Multi-code rows are expanded to one row per code."""
+    data = json.loads((path or PROC / f"{stem}.json").read_text(encoding="utf8"))
+    fails = _failure_keys(failures_csv or PROC / f"{stem}_failures.csv")
+    sro = conn.execute("SELECT * FROM sros WHERE sro_number = ?", (sro_number,)).fetchone()
+    if sro is None:
+        raise RuntimeError(f"load_sros first: {sro_number} missing")
+    src = data["summary"]["source_file"]
+    cur = conn.cursor()
+    cur.execute("DELETE FROM rd_rules WHERE sro_number = ?", (sro_number,))
+    counts = dict(source_rows=0, store_rows=0, needs_review=0, failures_matched=0, unmapped=0,
+                  conditional=0, expanded_multi_code=0, with_except_codes=0, unparsed_except=0)
+    matched_fail = set()
+    for row in data["rows"]:
+        counts["source_rows"] += 1
+        key = (str(row["s_no"]).strip(), int(row["page"]))
+        failed = key in fails
+        if failed:
+            matched_fail.add(key)
+            counts["failures_matched"] += 1
+        codes = split_codes(row["pct_code"])
+        if not codes:
+            codes = [None]
+            counts["unmapped"] += 1
+        elif len(codes) > 1:
+            counts["expanded_multi_code"] += 1
+        excepts, unparsed = parse_except(row["description"])
+        rf = _rate_fields(row)
+        issues = list(row.get("issues") or [])
+        review = failed or row.get("status") == "review"
+        if rf["rate_kind"] == "conditional":
+            issues.append("rate is conditional text, not a single number")
+            counts["conditional"] += 1
+            review = True
+        if codes == [None]:
+            issues.append("pct_code does not name a code or heading; needs manual mapping")
+            review = True
+        for c in codes:
+            if c is None:
+                level = "unmapped"
+            elif len(c) == 8:
+                level = "code8"
+            elif len(c) == 4:
+                level = "heading4"
+            else:
+                raise ValueError(f"unexpected code length in S.No {row['s_no']}: {row['pct_code']!r}")
+            cur.execute(
+                "INSERT INTO rd_rules (sro_number, s_no, raw_pct_code, description, clause, issues,"
+                " code_norm, match_level, except_codes, unparsed_except_text, rule_group,"
+                " rate_kind, rate_pct, rate_specific_amount, rate_specific_unit, rate_raw,"
+                " status, valid_from, valid_to, source_file, page)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (sro_number, str(row["s_no"]), row["pct_code"], row["description"],
+                 f"Table S.No {row['s_no']}", "; ".join(issues) or None,
+                 c, level, json.dumps(excepts), 1 if unparsed else 0, sro_number,
+                 rf["rate_kind"], rf["rate_pct"], rf["rate_specific_amount"], rf["rate_specific_unit"],
+                 rf["rate_raw"], "needs_review" if review else "accepted",
+                 sro["valid_from"], sro["valid_to"], src, row["page"]),
+            )
+            counts["store_rows"] += 1
+            counts["needs_review"] += 1 if review else 0
+            counts["with_except_codes"] += 1 if excepts else 0
+            counts["unparsed_except"] += 1 if unparsed else 0
+    missing = fails - matched_fail
+    if missing:
+        raise RuntimeError(f"failure rows not found in {stem}.json: {sorted(missing)}")
+    conn.commit()
+    return counts
+
+
+# ------------------------------------------------- generic CSV/JSON contract
+
+TABLE_COLUMNS = {
+    # table -> (required columns, optional columns). Fact columns are always required.
+    "acd_rules": (["sro_number", "clause", "code_norm", "match_level", "rule_group", "rate_kind"],
+                  ["slab_pct", "condition_text", "except_codes", "unparsed_except_text", "rate_pct",
+                   "rate_specific_amount", "rate_specific_unit", "rate_raw", "status"]),
+    "sales_tax_rules": (["instrument", "clause", "tax_kind", "code_norm", "match_level", "rule_group", "rate_kind"],
+                        ["importer_status", "charged_on", "condition_text", "except_codes",
+                         "unparsed_except_text", "rate_pct", "rate_specific_amount", "rate_specific_unit",
+                         "rate_raw", "status"]),
+    "income_tax_rules": (["instrument", "clause", "code_norm", "match_level", "rule_group", "rate_kind"],
+                         ["importer_status", "importer_category", "charged_on", "condition_text", "except_codes",
+                          "unparsed_except_text", "rate_pct", "rate_specific_amount", "rate_specific_unit",
+                          "rate_raw", "status"]),
+    "legal_notes": (["note_kind", "scope", "note_no", "text"], ["hs_edition", "status"]),
+}
+FACT = ["valid_from", "valid_to", "source_file", "page"]
+
+
+def load_table_file(conn: sqlite3.Connection, table: str, path: Path) -> int:
+    """Load a CSV (header row) or JSON (list of objects) into one of the contract tables.
+
+    Empty CSV cells become NULL (so a missing page/valid_from fails the NOT NULL check).
+    Unknown or missing required columns raise ValueError. The load is all-or-nothing.
+    """
+    if table not in TABLE_COLUMNS:
+        raise ValueError(f"no loader contract for {table!r}; allowed: {sorted(TABLE_COLUMNS)}")
+    req, opt = TABLE_COLUMNS[table]
+    path = Path(path)
+    if path.suffix.lower() == ".json":
+        rows = json.loads(path.read_text(encoding="utf8"))
+        if isinstance(rows, dict):
+            rows = rows["rows"]
+    else:
+        with open(path, encoding="utf8", newline="") as f:
+            rows = list(csv.DictReader(f))
+    allowed = set(req) | set(opt) | set(FACT)
+    cur = conn.cursor()
+    n = 0
+    try:
+        for i, r in enumerate(rows, 1):
+            missing = [c for c in req + FACT if c not in r]
+            extra = [c for c in r if c not in allowed]
+            if missing or extra:
+                raise ValueError(f"{path.name} row {i}: missing columns {missing}, unknown columns {extra}")
+            vals = {k: (None if (isinstance(v, str) and v.strip() == "") else v) for k, v in r.items()}
+            if isinstance(vals.get("except_codes"), list):
+                vals["except_codes"] = json.dumps(vals["except_codes"])
+            vals = {k: v for k, v in vals.items() if not (v is None and k in ("except_codes", "status",
+                    "unparsed_except_text", "importer_status", "hs_edition"))}
+            cols = list(vals)
+            cur.execute(f"INSERT INTO {table} ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
+                        [vals[c] for c in cols])
+            n += 1
+    except Exception:
+        conn.rollback()
+        raise
+    conn.commit()
+    return n
