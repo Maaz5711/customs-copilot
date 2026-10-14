@@ -61,6 +61,11 @@ def _short(text: str, n: int) -> str:
     return t if len(t) <= n else t[: n - 3].rstrip() + "..."
 
 
+def note_body(text: str) -> str:
+    """Legal-note text without the index prefix ('chapter_note Chapter 61 note 1: ...'), which the prompt already prints as a label."""
+    return re.sub(r"^[a-z_]+\s+[^:]{0,60}?note\s+\S+:\s*", "", text or "", flags=re.I)
+
+
 def line_description(text: str) -> str:
     """'6109.1000 Heading title > Of cotton' -> 'Heading title > Of cotton' (the part after the code)."""
     return re.sub(r"^\s*\d{4}\.\d{4}\s*", "", text or "").strip()
@@ -288,7 +293,7 @@ def evidence_text(evidence: dict, *, include_sro: bool = True) -> str:
     for n in evidence.get("notes", []):
         cap = GRI_CHARS if n.get("kind") == "gri" else NOTE_CHARS
         who = f"{n['scope']} note {n['number']}" if n.get("kind") != "gri" else f"GRI rule {n['number']}"
-        out.append(f"[{n['label']}] {who} ({n.get('kind')}): {_short(n['text'], cap)}")
+        out.append(f"[{n['label']}] {who} ({n.get('kind')}): {_short(note_body(n['text']), cap)}")
     if not evidence.get("notes"):
         out.append("(none found)")
     if include_sro and evidence.get("sro"):

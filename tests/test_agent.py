@@ -185,6 +185,17 @@ def test_legal_note_contradiction_fails_verification_but_invented_note_labels_ar
     assert any("do not exist (N99)" in w for w in t2.final["verification"]["warnings"])
 
 
+def test_verification_warnings_are_shown_and_auditor_text_is_sanitised(db):
+    llm = tshirt_llm(verify=verify(problems=["the fabric weight was not stated"], unsupported=["Duty is 55% under SRO 9999(I)/2030, page 4321"]))
+    agent, _ = make_agent(llm, db)
+    f = agent.ask(TSHIRT_MSG, as_of_date=D15).final
+    assert f["status"] == "answer"                                           # the guard did not trip: the invented figures never got in
+    assert "warning: unchecked: the fabric weight was not stated" in f["text"]
+    assert "warning: unsupported claim: (text withheld" in f["text"]
+    for fake in ("55%", "9999(I)/2030", "4321"):
+        assert fake not in f["text"]
+
+
 # ===================================================================== codes: the LLM can never put an invalid code in an answer
 def test_invalid_llm_codes_are_rejected_and_never_shown(db):
     # 9999.9999 is not in the tariff; 6110.2000 is a real tariff line that was NOT among the retrieved candidates

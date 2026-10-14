@@ -193,6 +193,28 @@ def test_thought_parts_are_ignored(tmp_path):
     assert call(make(net, tmp_path)).data == {"x": 7}
 
 
+def test_a_model_that_just_failed_with_503_is_tried_last_next_time(tmp_path):
+    now = [1_000_000.0]
+    net = Net({"m1": [R(503, {"error": {"message": "overloaded"}})], "m2": [ok({"x": 1}), ok({"x": 2})]})
+    llm = make(net, tmp_path, clock=lambda: now[0])
+    assert call(llm, "a").model == "m2" and net.urls == ["m1", "m1", "m2"]            # m1 failed twice (one retry), m2 answered
+    # next request: m2 goes first, m1 is not wasted on again
+    assert call(llm, "b").model == "m2" and net.urls == ["m1", "m1", "m2", "m2"]
+    # after the cooldown m1 is back at the front of the line
+    now[0] += 200.0
+    net.by_model["m1"] = [ok({"x": 9})]
+    assert call(llm, "c").model == "m1"
+
+
+def test_cooldown_does_not_stop_a_model_being_used_when_it_is_the_only_one_left(tmp_path):
+    err = R(503, {"error": {"message": "overloaded"}})
+    net = Net({"m1": [err, err, ok({"x": 1})]})          # the first request is retried once, so two 503s make one failed call
+    llm = make(net, tmp_path, models=("m1",))
+    with pytest.raises(LLMUnavailable):
+        call(llm, "a")                       # fails, m1 is cooling
+    assert call(llm, "b").data == {"x": 1}   # but it is still tried (cooldown only changes the order)
+
+
 # ------------------------------------------------------------------------------------- budget, key, secrets
 def test_live_call_budget_stops_before_sending(tmp_path):
     net = Net({"m1": [ok({"x": 1}), ok({"x": 2})]})
