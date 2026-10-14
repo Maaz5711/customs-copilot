@@ -7,3 +7,5 @@ rank-bm25
 fastembed
 numpy
 mcp>=2.3
+langgraph
+langgraph-checkpoint-sqlite
