@@ -67,6 +67,19 @@ RATE_CHECK = """
     , 0))
 """
 
+FED_RATE_CHECK = """
+    CHECK (COALESCE(
+        (rate_kind = 'percent'  AND rate_pct IS NOT NULL AND rate_pct >= 0 AND rate_pct <= 100
+                                AND rate_specific_amount IS NULL AND rate_basis IS NOT NULL) OR
+        (rate_kind = 'specific' AND rate_specific_amount IS NOT NULL AND rate_specific_amount > 0
+                                AND rate_specific_unit IS NOT NULL AND rate_pct IS NULL) OR
+        (rate_kind = 'compound' AND rate_pct IS NOT NULL AND rate_pct >= 0 AND rate_pct <= 100
+                                AND rate_specific_amount IS NOT NULL AND rate_specific_amount > 0
+                                AND rate_specific_unit IS NOT NULL AND compound_rule = 'higher_of') OR
+        (rate_kind = 'exempt'   AND rate_pct IS NULL AND rate_specific_amount IS NULL)
+    , 0))
+"""
+
 DDL = f"""
 CREATE TABLE IF NOT EXISTS tariff_headings (
     id INTEGER PRIMARY KEY,
@@ -182,6 +195,40 @@ CREATE TABLE IF NOT EXISTS income_tax_rules (
     {HIER_CHECK},
     {RATE_CHECK}
 );
+
+CREATE TABLE IF NOT EXISTS fed_rules (
+    id INTEGER PRIMARY KEY,
+    row_id TEXT NOT NULL UNIQUE,      -- fed<year>:<table>:<serial><sub>:<code>
+    fy TEXT NOT NULL CHECK (fy IN ('FY2025-26','FY2026-27')),
+    schedule TEXT NOT NULL CHECK (schedule IN ('First','Third')),   -- Federal Excise Act 2005 schedule
+    table_no TEXT NOT NULL,           -- 'I', 'IA' (Special Excise Duty), 'III' (First Schedule) or 'Third-I' (Third Schedule goods)
+    s_no TEXT NOT NULL,               -- serial as printed: '55A', '8b'
+    sub TEXT NOT NULL DEFAULT '',     -- sub-clause label '(a)' (engine-capacity / value bands)
+    description TEXT NOT NULL,
+    sub_desc TEXT,
+    heading_raw TEXT NOT NULL DEFAULT '',   -- heading column exactly as printed ('Respective heading' = no code)
+    applies_to TEXT NOT NULL CHECK (applies_to IN ('import_only','local_only','import_and_local','unclear')),
+    rate_basis TEXT CHECK (rate_basis IS NULL OR rate_basis IN ('ad_valorem','retail_price')),
+    rate_ref_s_no TEXT,               -- rate printed by reference to another serial (S.No 8 -> S.No 9)
+    compound_rule TEXT CHECK (compound_rule IS NULL OR compound_rule = 'higher_of'),
+    cc_ge INTEGER, cc_gt INTEGER, cc_le INTEGER,      -- cylinder capacity band in cc (inclusive >=, exclusive >, inclusive <=)
+    usd_gt INTEGER, usd_le INTEGER,                   -- value band in USD (section 25 value), exclusive >, inclusive <=
+    condition_text TEXT,
+    effective_note TEXT,
+    amended_by TEXT,                  -- Finance Act clause that made this row differ from the previous year (red text)
+    issues TEXT NOT NULL DEFAULT '',
+    {HIER_COLS},
+    rate_kind TEXT NOT NULL CHECK (rate_kind IN ('percent','specific','compound','exempt')),
+    rate_pct REAL,
+    rate_specific_amount REAL,
+    rate_specific_unit TEXT,
+    rate_raw TEXT,
+    {STATUS_COL},
+    {FACT_COLS},
+    {HIER_CHECK},
+    {FED_RATE_CHECK}
+);
+CREATE INDEX IF NOT EXISTS ix_fed_code ON fed_rules (code_norm, valid_from, valid_to);
 
 CREATE TABLE IF NOT EXISTS legal_notes (
     id INTEGER PRIMARY KEY,

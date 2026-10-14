@@ -23,7 +23,7 @@ import datetime as _dt
 import json
 import re
 
-HIER_TABLES = ("rd_rules", "acd_rules", "sales_tax_rules", "income_tax_rules")
+HIER_TABLES = ("rd_rules", "acd_rules", "sales_tax_rules", "income_tax_rules", "fed_rules")
 KEY_COLUMNS = {
     "tariff_lines": "code_norm",
     "tariff_headings": "heading",
@@ -150,4 +150,27 @@ def resolve_candidates(cands: list[dict], target: str) -> list[dict]:
     for r in out:
         if counts[r["rule_group"]] > 1:
             r["_flags"].append("multiple_rows_same_specificity_choose_by_condition")
+    return out
+
+
+def get_fed_on_date(conn, code: str, on_date, statuses=None) -> dict:
+    """Federal excise duty rows for an IMPORTED 8-digit code on a date (Federal Excise Act 2005 First/Third Schedule).
+
+    Wraps get_rule_on_date(conn, 'fed_rules', ...) and sorts the rows the caller must treat differently:
+      applicable_first_schedule  Table I / Table IA rows that can be charged on an import (applies_to import_only or import_and_local);
+                                 Table IA (Special Excise Duty) is a separate rule_group: cumulative with Table I (s.3(3B) "in addition").
+                                 Several rows of one serial (engine-capacity or value bands) come back together: the caller picks the band.
+      local_only_not_applied     rows whose description limits them to locally produced goods (kept visible, never applied to imports).
+      possible_exemptions        Third Schedule rows (conditional exemptions): never applied by the store.
+    Rows with match_level 'unmapped' (heading column prints 'Respective heading') are NOT returned: they cannot match a code.
+    """
+    rows = get_rule_on_date(conn, "fed_rules", code, on_date, statuses=statuses)
+    out = {"applicable_first_schedule": [], "local_only_not_applied": [], "possible_exemptions": []}
+    for r in rows:
+        if r["schedule"] == "Third":
+            out["possible_exemptions"].append(r)
+        elif r["applies_to"] == "local_only":
+            out["local_only_not_applied"].append(r)
+        else:
+            out["applicable_first_schedule"].append(r)
     return out
