@@ -6,7 +6,7 @@ import pytest
 
 from src.agent.facts import apply_value, coerce, get_path, set_path, tool_args
 from src.agent.parsing import (
-    detect_currency, display_code, dec_str, find_pct_codes, is_unknown, norm_ws, parse_amount, parse_bool, parse_date_text,
+    detect_currency, display_code, dec_str, find_pct_codes, is_bare_yes_no, is_unknown, norm_ws, parse_amount, parse_bool, parse_date_text,
     parse_enum, parse_number, parse_quantity, parse_registration, parse_vehicle_form, quote_in, says_today,
     unsupported_fiscal_year,
 )
@@ -179,3 +179,10 @@ def test_paths_and_tool_args():
     assert args == {"assessable_value_pkr": "1000000", "importer": {"registration_status": "registered"}, "goods": {"engine_cc": "1300"},
                     "quantity": "2", "quantity_unit": "MT"}
     assert tool_args({}) == {"assessable_value_pkr": None, "importer": None, "goods": None, "quantity": None, "quantity_unit": None}
+
+
+def test_bare_yes_no_answers_are_detected():
+    for t in ("no", "Yes", "yes, it is", "not really", "No.", "nahi"):
+        assert is_bare_yes_no(t), t
+    for t in ("yes, hybrid", "no, diesel", "petrol 1300cc", "100% cotton", ""):
+        assert not is_bare_yes_no(t), t

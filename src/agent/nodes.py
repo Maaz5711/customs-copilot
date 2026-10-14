@@ -21,7 +21,7 @@ from .facts import apply_value, coerce, spec_for, tool_args
 from .ground import Corpus, check_text, clean_llm_text
 from .llm import LLM, LLMBadResponse, LLMError
 from .parsing import (
-    display_code, find_pct_codes, is_unknown, parse_date_text, parse_number, parse_quantity, parse_registration, parse_vehicle_form,
+    display_code, find_pct_codes, is_bare_yes_no, is_unknown, parse_date_text, parse_number, parse_quantity, parse_registration, parse_vehicle_form,
     quote_in, says_today, unsupported_fiscal_year,
 )
 from .respond import conf_text, render_answer, render_error, render_needs_input, render_not_sure, render_refusal
@@ -129,7 +129,8 @@ def build_query(facts: dict, clar: list) -> str:
         if v and v.lower() not in desc.lower():
             parts.append(v)
     for c in clar:
-        if c.get("kind") == "classification" and not c.get("unknown") and c.get("answer"):
+        # a bare yes/no says nothing about the goods and only adds noise to the search query (it stays in the Classify prompt as Q and A)
+        if c.get("kind") == "classification" and not c.get("unknown") and c.get("answer") and not is_bare_yes_no(str(c["answer"])):
             parts.append(str(c["answer"]))
     return re.sub(r"\s+", " ", " ".join(parts)).strip()[:400]
 
