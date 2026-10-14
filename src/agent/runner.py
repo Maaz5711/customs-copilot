@@ -65,11 +65,15 @@ class CustomsAgent:
     def ask(self, question: str, as_of_date: str | None = None, thread_id: str | None = None) -> TurnResult:
         """Start a new conversation. `as_of_date` is an explicit date (never assumed). Returns either questions or a final answer."""
         tid = thread_id or uuid.uuid4().hex
+        if self.graph.get_state(self._cfg(tid)).values:
+            raise ValueError(f"thread '{tid}' already exists; use resume() to continue it or pick a new thread id")
         out = self.graph.invoke({"question": question, "date_arg": as_of_date}, self._cfg(tid))
         return self._result(tid, out)
 
     def resume(self, thread_id: str, answer: Any) -> TurnResult:
         """Answer the pending questions. `answer`: a string, {'answers': {question id: text}} or {question id: text}."""
+        if self.pending(thread_id) is None:
+            raise ValueError(f"thread '{thread_id}' has no pending questions")
         out = self.graph.invoke(Command(resume=answer), self._cfg(thread_id))
         return self._result(thread_id, out)
 
