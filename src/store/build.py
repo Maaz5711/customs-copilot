@@ -21,6 +21,7 @@ def build(db_path=DEFAULT_DB_PATH) -> dict:
     report["acd_rules"] = load_table_file(conn, "acd_rules", PROC / "a3_acd_rules.csv")
     report["sales_tax_rules"] = load_table_file(conn, "sales_tax_rules", PROC / "a3_sales_tax_rules.csv")
     report["income_tax_rules"] = load_table_file(conn, "income_tax_rules", PROC / "a3_income_tax_rules.csv")
+    report["fed_rules"] = load_table_file(conn, "fed_rules", PROC / "a6_fed_rules.csv")
     notes = PROC / "legal_notes_store.json"      # derived from legal_notes.json (A4), kept in git so the mapping is auditable
     notes.write_text(json.dumps(legal_notes_rows(), indent=1, ensure_ascii=False), encoding="utf-8")
     report["legal_notes"] = load_table_file(conn, "legal_notes", notes)

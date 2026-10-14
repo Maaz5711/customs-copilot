@@ -349,6 +349,11 @@ TABLE_COLUMNS = {
                           "unparsed_except_text", "rate_pct", "rate_specific_amount", "rate_specific_unit",
                           "rate_raw", "status"]),
     "legal_notes": (["note_kind", "scope", "note_no", "text"], ["hs_edition", "status", "table_json"]),
+    "fed_rules": (["row_id", "fy", "schedule", "table_no", "s_no", "description", "code_norm", "match_level", "rule_group",
+                   "applies_to", "rate_kind"],
+                  ["sub", "sub_desc", "heading_raw", "rate_basis", "rate_ref_s_no", "compound_rule", "cc_ge", "cc_gt", "cc_le",
+                   "usd_gt", "usd_le", "condition_text", "effective_note", "amended_by", "issues", "except_codes",
+                   "unparsed_except_text", "rate_pct", "rate_specific_amount", "rate_specific_unit", "rate_raw", "status"]),
 }
 FACT = ["valid_from", "valid_to", "source_file", "page"]
 
@@ -389,7 +394,8 @@ def load_table_file(conn: sqlite3.Connection, table: str, path: Path) -> int:
             if isinstance(vals.get("except_codes"), list):
                 vals["except_codes"] = json.dumps(vals["except_codes"])
             vals = {k: v for k, v in vals.items() if not (v is None and k in ("except_codes", "status",
-                    "unparsed_except_text", "importer_status", "hs_edition", "table_json"))}
+                    "unparsed_except_text", "importer_status", "hs_edition", "table_json",
+                    "sub", "heading_raw", "issues"))}
             cols = list(vals)
             cur.execute(f"INSERT INTO {table} ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
                         [vals[c] for c in cols])
