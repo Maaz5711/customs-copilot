@@ -109,6 +109,15 @@ def is_unknown(text: str | None) -> bool:
     return bool(_UNKNOWN.search(norm_ws(text)))
 
 
+_FILLER = {"it", "is", "isn't", "are", "aren't", "we", "i", "do", "don't", "does", "doesn't", "was", "were", "not", "no", "yes", "sure", "really", "that", "this", "so", "please"}
+
+
+def is_bare_yes_no(text: str | None) -> bool:
+    """True for answers that are only a yes or a no ('no', 'Yes, it is', 'not really'), which say nothing about the goods."""
+    words = re.findall(r"[a-z']+", norm_ws(text))
+    return bool(words) and all(w in _YES or w in _NO or w in _FILLER for w in words)
+
+
 def parse_bool(text: str | None) -> bool | None:
     """yes/no (English and common Urdu transliterations). None when unclear or when both polarities appear."""
     t = norm_ws(text)

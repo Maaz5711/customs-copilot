@@ -144,13 +144,16 @@ def test_no_candidate_but_questions_asks_instead_of_retrying(db):
                    "classify": [classify(ambiguous=True, questions=["What is the engine type and cylinder capacity of the car?", "Is it a snow vehicle or golf car?"],
                                          deciding="engine type and capacity decide the sub-heading", refined=["motor cars"]),
                                 classify(cand("8703.2113", 0.9))]})
-    agent, _ = make_agent(llm, db)
+    stub = StubRetriever()
+    agent, _ = make_agent(llm, db, retriever=stub)
     t1 = agent.ask("I want to import a car", as_of_date=D15)
     assert t1.interrupt["kind"] == "classification" and len(t1.interrupt["questions"]) == 2 and "engine type" in t1.interrupt["questions"][0]["question"]
     assert t1.state["retries"] == 0 and llm.count("classify") == 1                       # asked, did not burn a retry
     t2 = agent.resume(t1.thread_id, {"answers": {"q1": "petrol, 800cc", "q2": "no"}})
     assert t2.interrupt["kind"] == "duty_input" and "goods.vehicle_form" in {q["id"] for q in t2.interrupt["questions"]}
     assert "petrol, 800cc" in [c for c in llm.calls if c["task"] == "classify"][1]["prompt"]
+    tariff_queries = [q for i, q in stub.calls if i == "tariff"]
+    assert any("petrol, 800cc" in q for q in tariff_queries) and not any(q.endswith(" no") for q in tariff_queries)     # the bare "no" is not searched for
 
 
 def test_the_question_budget_ends_in_not_sure_instead_of_asking_forever(db):
