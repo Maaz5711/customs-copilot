@@ -558,6 +558,34 @@ def test_sqlite_checkpointer_lets_a_paused_conversation_survive_a_restart(db, tm
     conn2.close()
 
 
+def test_thread_misuse_is_reported_clearly(db):
+    llm = tshirt_llm()
+    agent, _ = make_agent(llm, db)
+    f = agent.ask(TSHIRT_MSG, as_of_date=D15, thread_id="done1")
+    assert f.final["status"] == "answer"
+    with pytest.raises(ValueError, match="already exists"):
+        agent.ask("something else", thread_id="done1")                  # no silent reuse of old state
+    with pytest.raises(ValueError, match="no pending questions"):
+        agent.resume("done1", "yes")
+    with pytest.raises(ValueError, match="no pending questions"):
+        agent.resume("never-existed", "yes")
+
+
+def test_unrecognised_resume_payload_is_asked_again_without_an_llm_call(db):
+    llm = tshirt_llm(understand=understand(goods_description="men's cotton T-shirts", value_text="PKR 1,000,000"))
+    agent, _ = make_agent(llm, db)
+    t1 = agent.ask("men's cotton T-shirts, value PKR 1,000,000", as_of_date=D15)
+    t2 = agent.resume(t1.thread_id, {"unrelated": "x"})
+    assert t2.interrupt and all(q.get("error") for q in t2.interrupt["questions"]) and llm.count("map_answers") == 0
+
+
+def test_structured_answers_may_be_real_booleans(db):
+    agent, _ = make_agent(tshirt_llm(understand=understand(goods_description="men's cotton T-shirts", value_text="PKR 1,000,000")), db)
+    t1 = agent.ask("men's cotton T-shirts, value PKR 1,000,000", as_of_date=D15)
+    t2 = agent.resume(t1.thread_id, {"answers": {"importer.registration_status": "registered", "importer.commercial_importer": True}})
+    assert t2.final["status"] == "answer"
+
+
 # ===================================================================== retrieval rules
 def test_score_floors_drop_irrelevant_hits_but_keep_exact_code_hits():
     class R(StubRetriever):

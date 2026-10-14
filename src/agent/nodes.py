@@ -152,6 +152,7 @@ def normalize_reply(reply: Any, questions: list) -> tuple[dict, str | None]:
         if "text" in reply:
             t = str(reply["text"])
             return ({ids[0]: t}, t) if len(ids) == 1 else ({}, t)
+        return {}, None
     return {}, str(reply)
 
 

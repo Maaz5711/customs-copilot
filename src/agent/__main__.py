@@ -153,7 +153,11 @@ def main(argv=None, *, input_fn=input, out=None, llm=None, agent_kwargs=None) ->
             tid = a.thread or uuid.uuid4().hex[:12]
             if a.db:
                 print(f"(conversation id: {tid})", file=out)
-            turn = agent.ask(first, as_of_date=a.date, thread_id=tid)
+            try:
+                turn = agent.ask(first, as_of_date=a.date, thread_id=tid)
+            except ValueError as e:         # for example: --thread names a conversation that already exists
+                print(f"{e}.", file=out)
+                return 1
             code = _drive(agent, turn, input_fn, out, a, llm, interactive)
             if a.question:          # a question on the command line is a one-shot run
                 return code
