@@ -53,8 +53,8 @@ def show_questions(intr: dict, out) -> None:
             print(f"        ({h}; type 'I don't know' if you do not know)", file=out)
 
 
-def ask_interactively(intr: dict, input_fn, out) -> dict:
-    show_questions(intr, out)
+def read_answers(intr: dict, input_fn) -> dict:
+    """One prompt per question. Raises EOFError when there is no input (closed stdin)."""
     answers = {}
     for q in intr["questions"]:
         answers[q["id"]] = input_fn(f"  your answer to [{q['id']}]> ")
@@ -170,15 +170,22 @@ def main(argv=None, *, input_fn=input, out=None, llm=None, agent_kwargs=None) ->
 
 def _drive(agent: CustomsAgent, turn: TurnResult, input_fn, out, a, llm, interactive: bool) -> int:
     while turn.interrupt:
-        if not interactive:
-            show_questions(turn.interrupt, out)
-            ids = " ".join(f"--answer {q['id']}=..." for q in turn.interrupt["questions"])
-            if a.db:
-                print(f"\nNot a terminal, so I stopped here. Continue with:\n  python -m src.agent --db {a.db} --thread {turn.thread_id} {ids}", file=out)
+        show_questions(turn.interrupt, out)
+        if interactive:
+            try:
+                reply = read_answers(turn.interrupt, input_fn)
+            except EOFError:                     # stdin is closed: behave like a non-interactive run
+                print("", file=out)
+                interactive = False
             else:
-                print("\nNot a terminal, so I stopped here. Add --db FILE (and --thread NAME) to your command to keep the conversation, then answer with --answer ID=TEXT.", file=out)
-            return 2
-        turn = agent.resume(turn.thread_id, ask_interactively(turn.interrupt, input_fn, out))
+                turn = agent.resume(turn.thread_id, reply)
+                continue
+        ids = " ".join(f"--answer {q['id']}=..." for q in turn.interrupt["questions"])
+        if a.db:
+            print(f"\nNot a terminal, so I stopped here. Continue with:\n  python -m src.agent --db {a.db} --thread {turn.thread_id} {ids}", file=out)
+        else:
+            print("\nNot a terminal, so I stopped here. Add --db FILE (and --thread NAME) to your command to keep the conversation, then answer with --answer ID=TEXT.", file=out)
+        return 2
     print_result(turn, out, a.debug, llm)
     return 1 if turn.final["status"] == "error" else 0
 

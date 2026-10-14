@@ -77,6 +77,17 @@ def test_cli_without_terminal_stops_with_the_questions_and_continues_from_a_chec
     assert "no pending questions" in out3.getvalue()
 
 
+def test_cli_with_closed_stdin_prints_the_questions_and_how_to_continue(db):
+    def closed(prompt=""):
+        raise EOFError
+
+    out = io.StringIO()
+    code = cli.main(["laptop computers", "--date", "2026-07-15", "--db", str(PROC / "cache" / "unused_cli_test.sqlite")], input_fn=closed, out=out, llm=laptop_llm(), agent_kwargs=kwargs(db))
+    t = out.getvalue()
+    assert code == 2 and "[1/4]" in t and "Not a terminal" in t and "--answer" in t and "Traceback" not in t
+    (PROC / "cache" / "unused_cli_test.sqlite").unlink(missing_ok=True)
+
+
 def test_cli_refuses_an_unsupported_date_and_exits_cleanly(db):
     out = io.StringIO()
     code = cli.main(["laptops", "--date", "2023-01-01"], input_fn=lambda p="": "", out=out, llm=FakeLLM({}), agent_kwargs=kwargs(db))

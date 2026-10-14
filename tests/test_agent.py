@@ -138,6 +138,34 @@ def test_classification_questions_come_from_the_classifier_and_reach_search_and_
     assert t2.state["retries"] == 0                                                           # a clarification is not a retry
 
 
+def test_no_candidate_but_questions_asks_instead_of_retrying(db):
+    """Real Gemini behaviour for 'I want to import a car': no candidate yet, ambiguous, two questions that would decide it."""
+    llm = FakeLLM({"understand": understand(goods_description="a car"),
+                   "classify": [classify(ambiguous=True, questions=["What is the engine type and cylinder capacity of the car?", "Is it a snow vehicle or golf car?"],
+                                         deciding="engine type and capacity decide the sub-heading", refined=["motor cars"]),
+                                classify(cand("8703.2113", 0.9))]})
+    agent, _ = make_agent(llm, db)
+    t1 = agent.ask("I want to import a car", as_of_date=D15)
+    assert t1.interrupt["kind"] == "classification" and len(t1.interrupt["questions"]) == 2 and "engine type" in t1.interrupt["questions"][0]["question"]
+    assert t1.state["retries"] == 0 and llm.count("classify") == 1                       # asked, did not burn a retry
+    t2 = agent.resume(t1.thread_id, {"answers": {"q1": "petrol, 800cc", "q2": "no"}})
+    assert t2.interrupt["kind"] == "duty_input" and "goods.vehicle_form" in {q["id"] for q in t2.interrupt["questions"]}
+    assert "petrol, 800cc" in [c for c in llm.calls if c["task"] == "classify"][1]["prompt"]
+
+
+def test_the_question_budget_ends_in_not_sure_instead_of_asking_forever(db):
+    ask = classify(ambiguous=True, questions=["More detail please?"])
+    llm = FakeLLM({"understand": understand(goods_description="a car"), "classify": ask})
+    agent, _ = make_agent(llm, db, cfg=Config(max_clarify_rounds=2))
+    t = agent.ask("a car", as_of_date=D15)
+    rounds = 0
+    while t.interrupt:
+        rounds += 1
+        assert rounds <= 2
+        t = agent.resume(t.thread_id, {"answers": {k["id"]: "no idea what else to say" for k in t.interrupt["questions"]}})
+    assert t.final["status"] == "not_sure" and rounds == 2
+
+
 # ===================================================================== Verify retries, then "not sure"
 def test_not_sure_mode_after_two_failed_verifications(db):
     llm = tshirt_llm(verify=verify(fits=False, conf=0.3, problems=["the goods are not clearly made of cotton"], hint="knitted t-shirts of man-made fibres"))
@@ -343,6 +371,47 @@ def test_free_text_reply_to_several_questions_is_mapped_by_the_llm_then_read_by_
     assert t2.final["status"] == "answer" and llm.count("map_answers") == 1
     assert t2.final["bill"]["totals"]["total_payable_pkr"] == compute_duty("6109.1000", 1000000, D15, importer={"registration_status": "unregistered", "commercial_importer": True}, db_path=db)["totals"]["total_payable_pkr"]
     assert any(ln["tax"] == "FURTHER_TAX" for ln in t2.final["bill"]["optional_lines_not_in_total"])      # unregistered: further tax shown, not added
+
+
+def code_only_llm(value_text, code, **extra):
+    return FakeLLM({"understand": understand(value_text=value_text, codes_text=[code], **extra)})
+
+
+def test_specific_duty_asks_for_the_quantity_in_the_tariff_unit_and_never_converts(db):
+    agent, _ = make_agent(code_only_llm("PKR 1,000,000", "1507.1000", **IMPORTER_FULL), db)
+    t1 = agent.ask("duty on 1507.1000, value PKR 1,000,000, registered importer, commercial importer", as_of_date=D15)
+    q = questions(t1)
+    assert set(q) == {"quantity"} and q["quantity"]["unit"] == "MT" and "MT" in q["quantity"]["question"]
+    t2 = agent.resume(t1.thread_id, "2000 kg")                          # wrong unit: refused, not converted
+    assert t2.interrupt and "do not convert units" in questions(t2)["quantity"]["error"]
+    t3 = agent.resume(t2.thread_id, "2 MT")
+    assert t3.final["status"] == "answer" and "303,821.59" in t3.final["text"]          # hand case 6 in tests/test_tools.py
+    assert "Rs 10,550 per MT x 2 MT" in t3.final["text"] and "needs_review" in t3.final["text"]   # rotated-cell rate is flagged, not hidden
+
+
+def test_film_running_time_is_asked_as_a_number(db):
+    agent, _ = make_agent(code_only_llm("PKR 1,000,000", "3706.1000", **IMPORTER_FULL), db)
+    t1 = agent.ask("duty on 3706.1000, value PKR 1,000,000, registered importer, commercial importer", as_of_date=D15)
+    assert "goods.running_time_minutes" in questions(t1) and questions(t1)["goods.running_time_minutes"]["type"] == "number"
+    t2 = agent.resume(t1.thread_id, {"answers": {k: ("90 minutes" if k == "goods.running_time_minutes" else "1000 metres" if k == "quantity" else "no") for k in questions(t1)}})
+    assert t2.interrupt is None or t2.interrupt["kind"] == "duty_input"
+
+
+def test_mobile_phone_gives_a_partial_bill_and_no_total(db):
+    agent, _ = make_agent(code_only_llm("PKR 1,000,000", "8517.1390", quantity_text="10 sets", **IMPORTER_FULL), db)
+    t1 = agent.ask("duty on 8517.1390, 10 sets, value PKR 1,000,000, registered importer, commercial importer", as_of_date=D15)
+    answers = {"goods.c_and_f_value_usd_per_unit": "150", "goods.plant_machinery_for_manufacturing": "no"}
+    t2 = agent.resume(t1.thread_id, {"answers": {k: answers[k] for k in questions(t1) if k in answers}})
+    f = t2.final
+    assert f["status"] == "cannot_compute" and f["bill"]["totals"] is None and "NO TOTAL IS GIVEN" in f["text"] and "TOTAL PAYABLE" not in f["text"]
+    assert "60,000.00" in f["text"] and "sales tax" in f["text"] and "NOT the amount payable" in f["text"]
+
+
+def test_a_fiscal_year_without_a_date_is_asked_for_an_exact_date(db):
+    llm = tshirt_llm(understand=understand(goods_description="men's cotton T-shirts", value_text="PKR 1,000,000", **IMPORTER_FULL))
+    agent, _ = make_agent(llm, db)
+    t = agent.ask(TSHIRT_MSG + " in FY2026-27")
+    assert t.interrupt and "need an exact date" in questions(t)["as_of_date"]["question"]
 
 
 # ===================================================================== dates
