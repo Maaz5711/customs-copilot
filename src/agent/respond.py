@@ -236,6 +236,8 @@ def render_answer(state: dict, verification: dict | None = None) -> dict:
     if verification:
         lines_out.append("")
         lines_out.append("CHECKS RUN: " + verification.get("summary", ""))
+        for w in verification.get("warnings", []):
+            lines_out.append(f"  - warning: {w}")
     lines_out.append("")
     lines_out.append(DISCLAIMER)
     return {"status": status, "text": "\n".join(lines_out), "code": lookup["code"], "description": desc, "as_of_date": state.get("as_of_date"),

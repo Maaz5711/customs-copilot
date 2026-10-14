@@ -293,6 +293,8 @@ class GeminiLLM:
         self.max_calls, self.max_failures = max_calls, max_failures
         self.quota = quota_book if quota_book is not None else QuotaBook(clock=clock)
         self.timeout, self.max_wait_s = timeout, max_wait_s
+        self.cooldown_s = 90.0
+        self._cool: dict[str, float] = {}       # model -> epoch until which it is tried last (it just failed for a non-quota reason)
         self.stats = {"live_calls": 0, "failed_requests": 0, "cache_hits": 0, "by_model": {}, "log": []}
 
     # ---- key / http
@@ -392,6 +394,11 @@ class GeminiLLM:
             raise _Skip(f"answer was not valid JSON ({e})")
         return parsed, text, dict(data.get("usageMetadata") or {})
 
+    def _ordered_models(self) -> list[str]:
+        """Models that failed recently (503, timeout, bad JSON) go to the back of the line instead of being tried first again."""
+        now = self._clock()
+        return [m for m in self.models if self._cool.get(m, 0) <= now] + [m for m in self.models if self._cool.get(m, 0) > now]
+
     # ---- public
     def complete_json(self, *, task: str, system: str, prompt: str, temperature: float = 0.0) -> LLMResult:
         key = self.cache.key(task, system, prompt, temperature)
@@ -402,7 +409,7 @@ class GeminiLLM:
         problems: dict[str, str] = {}
         rate_limited: dict[str, str] = {}
         retry_at: list[float] = []
-        for model in self.models:
+        for model in self._ordered_models():
             blocked = self.quota.blocked(model)
             if blocked:
                 problems[model] = f"skipped, quota used up until {_fmt_epoch(blocked['until'])} ({blocked.get('reason', '')[:80]})"
@@ -419,7 +426,10 @@ class GeminiLLM:
                     if s.until:
                         retry_at.append(s.until)
                         self.quota.mark(model, s.until, s.reason)
+                else:
+                    self._cool[model] = self._clock() + (3600.0 if "not available" in s.reason else self.cooldown_s)
                 continue
+            self._cool.pop(model, None)
             self.cache.put(key, {"task": task, "model": model, "response": parsed, "text": text, "usage": usage,
                                  "created_at": dt.datetime.now(dt.timezone.utc).isoformat(), "system": system, "prompt": prompt,
                                  "temperature": temperature})

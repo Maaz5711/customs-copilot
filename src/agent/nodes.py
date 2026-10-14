@@ -25,7 +25,7 @@ from .parsing import (
     quote_in, says_today, unsupported_fiscal_year,
 )
 from .respond import conf_text, render_answer, render_error, render_needs_input, render_not_sure, render_refusal
-from .retrieval import DEFAULT_FLOORS, NotesLoader, Retriever, default_notes_loader, default_retriever, evidence_text, gather, offered_codes
+from .retrieval import DEFAULT_FLOORS, NotesLoader, Retriever, default_notes_loader, default_retriever, evidence_text, gather, note_body, offered_codes
 from .schemas import SchemaError, validate_classify, validate_map, validate_understand, validate_verify
 from .toolbox import ToolBox
 
@@ -732,7 +732,7 @@ def make_verify(deps: Deps):
             warnings.append("no product description was given, so the language-model fit check was skipped")
         else:
             notes = verify_notes(state, top)
-            block = "LEGAL NOTES (labels N1.. are the only valid labels)\n" + "\n".join(f"[{n['label']}] {n['scope']} note {n['number']} ({n['kind']}): {re.sub(chr(10), ' ', n['text'])[:700]}" for n in notes)
+            block = "LEGAL NOTES (labels N1.. are the only valid labels)\n" + "\n".join(f"[{n['label']}] {n['scope']} note {n['number']} ({n['kind']}): {re.sub(chr(10), ' ', note_body(n['text']))[:700]}" for n in notes)
             prompt = prompts.verify_prompt(state.get("facts") or {}, state.get("clarifications") or [], top, [c for c in cands[1:3]], block, top.get("reasons", ""), date_iso)
             try:
                 res, lg = _call(deps, "verify", prompts.VERIFY_SYSTEM, prompt)
@@ -742,6 +742,10 @@ def make_verify(deps: Deps):
                 return _err_update(e)
             except SchemaError as e:
                 llm_part = {"fits": False, "fit_confidence": 0.0, "contradicting_notes": [], "unsupported_claims": [], "problems": [f"the auditor's answer could not be read ({e})"], "search_hint": None}
+            gc = Corpus(state.get("evidence"), user_text(state), state.get("facts"), state.get("inputs"), lookup, duty)
+            llm_part["problems"] = [clean_llm_text(x, gc, 300)[0] for x in llm_part["problems"]]
+            llm_part["unsupported_claims"] = [clean_llm_text(x, gc, 300)[0] for x in llm_part["unsupported_claims"]]
+            llm_part["contradicting_notes"] = [{"note": c["note"], "why": clean_llm_text(c["why"], gc, 300)[0]} for c in llm_part["contradicting_notes"]]
             labels = {n["label"]: n for n in notes}
             real = [c for c in llm_part["contradicting_notes"] if c["note"] in labels]
             ignored = [c for c in llm_part["contradicting_notes"] if c["note"] not in labels]
