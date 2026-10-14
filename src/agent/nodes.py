@@ -529,11 +529,15 @@ def make_classify(deps: Deps):
                 "extra_queries": out["refined_queries"], "verification": None}
         if issues:
             base["rejected_codes"] = base["rejected_codes"] + [{"code": "(text)", "reason": f"unsupported {i['type']} {i['token']} in model text"} for i in issues]
+        rounds_left = state.get("clarify_rounds", 0) < cfg.max_clarify_rounds
         if not valid:
+            if qs and rounds_left and not rejected:
+                # no line can be chosen yet but the classifier knows what would decide it (for example "a car": engine size and type): ask
+                return {**base, "pending_questions": qs, "clarify_kind": "classification", "route": "clarify",
+                        "trace": [f"classify: no candidate yet, asking {len(qs)} question(s)"]}
             why = "every code the classifier proposed failed the checks" if rejected else "the classifier found no fitting line among the candidates"
             return fail_or_retry(state, why, base)
         top = valid[0]
-        rounds_left = state.get("clarify_rounds", 0) < cfg.max_clarify_rounds
         if qs and rounds_left and (out["ambiguous"] or top["confidence"] < cfg.confidence_threshold):
             return {**base, "pending_questions": qs, "clarify_kind": "classification", "route": "clarify",
                     "trace": [f"classify: ambiguous (top {top['code']} {conf_text(top['confidence'])}), asking {len(qs)} question(s)"]}

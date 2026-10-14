@@ -33,16 +33,15 @@ QUOTA_FILE = ROOT / "data" / "processed" / "cache" / "gemini_quota.json"
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 # Order = preference. The first two were used for the A2 vision work on this key. The rest are extra fallbacks:
 # every model name has its own free-tier quota, so each one adds capacity. Override with GEMINI_MODELS="a,b,c".
+# gemini-2.5-flash answers "no longer available to new users" (live test, 2026-10-14), so the 2.5 models are not in the chain.
 DEFAULT_MODELS = (
     "gemini-3.5-flash",
     "gemini-3-flash-preview",
     "gemini-3.6-flash",
     "gemini-3.7-flash",
     "gemini-3.8-flash",
-    "gemini-2.5-flash",
     "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
-    "gemini-2.5-flash-lite",
 )
 CACHE_VERSION = "v1"
 
