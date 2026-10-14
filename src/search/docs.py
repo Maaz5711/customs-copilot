@@ -165,12 +165,12 @@ def _clause_docs(num: str, d: Path) -> list[dict]:
 
 
 RULINGS = [
-    ("2025717157016485ValuationRuling2006-2025.pdf", "Valuation Ruling 2025 (number illegible in scan), Chlorinated Paraffin Wax",
-     "2025-07-04", "date printed 'Dated: 04-07-2025'"),
+    ("2025717157016485ValuationRuling2006-2025.pdf", "Valuation Ruling No. 2006 (dated 4 July 2025), Chlorinated Paraffin Wax",
+     "2025-07-04", "owner read the scan (owner_answers.csv, 2026-10-14): number 2006, dated 4 July 2025"),
     ("202610212101254615VR2110.pdf", "Valuation Ruling No. 2110/2026 (massage chairs)",
-     "2026-10-01", "date printed as 'oL-10-2026' (OCR garbled); read as 1 Oct 2026"),
+     "2026-10-01", "owner read the scan (owner_answers.csv, 2026-10-14): number 2110, issued 1 October 2026, no effective wording printed"),
     ("2026991291422532PublicNotice60-2026.pdf", "Public Notice 60/2026, Collectorate of Customs Appraisement (classification of curing/drying chambers)",
-     "2026-09-01", "only month '09-2026' legible; day assumed 1"),
+     "2026-09-01", "owner read the scan (owner_answers.csv, 2026-10-14): number 60/2026, issued 1 September 2026, no effective wording printed"),
 ]
 
 
