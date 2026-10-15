@@ -495,7 +495,111 @@ class FakeLLM:
         return LLMResult(data=copy.deepcopy(item), model="fake", cached=False, text=json.dumps(item))
 
 
-PROVIDERS: dict[str, Callable[..., LLM]] = {"gemini": GeminiLLM, "fake": FakeLLM}
+# --------------------------------------------------------------------------------------------- DeepSeek
+DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
+DEEPSEEK_CACHE_DIR = ROOT / "data" / "processed" / "cache" / "llm_deepseek"     # separate from Gemini: the cache key has no model name
+
+
+class DeepSeekLLM:
+    """DeepSeek through its OpenAI-style chat API (paid, no daily quota). Key: DEEPSEEK_API_KEY in .env.
+
+    Model: DEEPSEEK_MODEL (default 'deepseek-flash'; 'deepseek-v4-pro' is the bigger one).
+    Thinking mode: DEEPSEEK_THINKING = 'disabled' (default, cheaper and faster) or 'enabled'. Keep it the same for every system in one evaluation.
+    Own cache folder, and the model and thinking mode are part of the cache key, so another provider's answer is never served as DeepSeek's.
+    """
+
+    name = "deepseek"
+
+    def __init__(self, api_key: str | None = None, model: str | None = None, *, thinking: str | None = None, cache: bool = True,
+                 cache_dir: Path | str | None = None, post: Callable | None = None, sleep: Callable[[float], None] = time.sleep,
+                 max_calls: int | None = None, max_failures: int = 30, timeout: float = 180.0, retries: int = 4):
+        self._api_key = api_key
+        self.model = model or os.environ.get("DEEPSEEK_MODEL", "").strip() or "deepseek-flash"
+        self.thinking = (thinking or os.environ.get("DEEPSEEK_THINKING", "").strip() or "disabled").lower()
+        if self.thinking not in ("enabled", "disabled"):
+            raise ValueError("thinking must be 'enabled' or 'disabled'")
+        self.cache = ResponseCache(cache_dir or DEEPSEEK_CACHE_DIR, enabled=cache)
+        self._post, self._sleep = post, sleep
+        self.max_calls, self.max_failures, self.timeout, self.retries = max_calls, max_failures, timeout, retries
+        self.stats = {"live_calls": 0, "failed_requests": 0, "cache_hits": 0, "tokens_in": 0, "tokens_out": 0, "log": []}
+
+    def _key(self) -> str:
+        if self._api_key:
+            return self._api_key
+        try:
+            from dotenv import load_dotenv
+
+            load_dotenv(ROOT / ".env")
+        except Exception:
+            pass
+        k = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+        if not k:
+            raise LLMUnavailable("DEEPSEEK_API_KEY is not set. Put it in .env (gitignored; never commit a key).")
+        self._api_key = k
+        return k
+
+    def complete_json(self, *, task: str, system: str, prompt: str, temperature: float = 0.0) -> LLMResult:
+        ckey = self.cache.key(task, system + f"\n#{self.model}/{self.thinking}", prompt, temperature)
+        hit = self.cache.get(ckey)
+        if hit is not None:
+            self.stats["cache_hits"] += 1
+            return LLMResult(data=hit["response"], model=hit.get("model", "?"), cached=True, text=hit.get("text", ""), usage=hit.get("usage", {}))
+        body = {"model": self.model, "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+                "response_format": {"type": "json_object"}, "thinking": {"type": self.thinking}, "stream": False}
+        if self.thinking == "disabled":
+            body["temperature"] = temperature
+        headers = {"Authorization": f"Bearer {self._key()}", "content-type": "application/json"}
+        post = self._post
+        if post is None:
+            import requests
+
+            post = requests.post
+        last = "no attempt"
+        for attempt in range(1, self.retries + 1):
+            if self.max_calls is not None and self.stats["live_calls"] >= self.max_calls:
+                raise LLMBudgetExceeded(f"live LLM call budget reached ({self.max_calls} calls this run); nothing more was sent")
+            if self.stats["failed_requests"] >= self.max_failures:
+                raise LLMUnavailable(f"too many failed LLM requests ({self.max_failures}); stopping")
+            try:
+                resp = post(DEEPSEEK_URL, headers=headers, json=body, timeout=self.timeout)
+            except Exception as e:
+                self.stats["failed_requests"] += 1
+                last = f"network error: {type(e).__name__}"
+                self._sleep(2.0 * attempt)
+                continue
+            st = resp.status_code
+            if st == 200:
+                self.stats["live_calls"] += 1
+                try:
+                    j = resp.json()
+                    text = j["choices"][0]["message"]["content"] or ""
+                    usage = j.get("usage") or {}
+                    parsed = parse_json_text(text)
+                except (ValueError, KeyError, IndexError, TypeError):
+                    last = "answer was not valid JSON"
+                    self.stats["failed_requests"] += 1
+                    continue
+                self.stats["tokens_in"] += int(usage.get("prompt_tokens") or 0)
+                self.stats["tokens_out"] += int(usage.get("completion_tokens") or 0)
+                self.cache.put(ckey, {"task": task, "model": self.model, "response": parsed, "text": text,
+                                      "usage": {k: usage.get(k) for k in ("prompt_tokens", "completion_tokens", "total_tokens")},
+                                      "created_at": dt.datetime.now(dt.timezone.utc).isoformat(), "system": system, "prompt": prompt,
+                                      "temperature": temperature, "thinking": self.thinking})
+                return LLMResult(data=parsed, model=self.model, cached=False, text=text, usage=usage)
+            self.stats["failed_requests"] += 1
+            if st in (401, 403):
+                raise LLMUnavailable(f"DeepSeek rejected the API key ({st}). Check DEEPSEEK_API_KEY in .env.")
+            if st == 402:
+                raise LLMRateLimited("DeepSeek balance is empty (HTTP 402). Top up the account, then run again; nothing more was sent.")
+            if st in (429, 500, 502, 503, 504):
+                last = f"http {st}"
+                self._sleep(3.0 * attempt)
+                continue
+            raise LLMUnavailable(f"DeepSeek http {st}: {resp.text[:200]}")
+        raise LLMBadResponse(f"DeepSeek did not give a usable answer after {self.retries} attempts ({last})")
+
+
+PROVIDERS: dict[str, Callable[..., LLM]] = {"gemini": GeminiLLM, "deepseek": DeepSeekLLM, "fake": FakeLLM}
 
 
 def make_llm(provider: str = "gemini", **kwargs) -> LLM:
