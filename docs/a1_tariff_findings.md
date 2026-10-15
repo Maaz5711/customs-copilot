@@ -52,7 +52,7 @@ corrected text in print order (headers, then own text). Headings no longer carry
 Safety (tests/test_tariff_descriptions.py): codes, CD values, specific duties, pages, heading list and Chapter 99 rows are
 identical to the JSON committed before the fix (7,605 / 7,590 unique codes, 1,228 headings, 54 specific rows each).
 Only descriptions changed. List of changes: `data/processed/tariff_description_changes.csv`
-(11,567 rows: 5,767 had the next group's header glued on, 8,663 gained their enclosing headers (counts overlap by type, see
-`change_type`), 37 recovered wrapped text). Pages 20, 124, 269, 315, 323 of FY2026-27 and the three pages above were
+(11,567 rows: 2,867 had the next group's header glued on (the bug), 8,663 only gained their enclosing headers, 37 recovered wrapped text; see
+`change_type`). Pages 20, 124, 269, 315, 323 of FY2026-27 and the three pages above were
 checked against page images with no errors found. Known limit: footnote or note text printed under the last row of a page
 (for example pages 98, 113) is still appended to that row, as before.
