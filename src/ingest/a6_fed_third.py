@@ -44,6 +44,7 @@ THIRD = [
      "made under the Customs Act, 1969 (IV of 1969).", "Respective Heading", 91, 94, 0),
     ("16", "Any goods, excluding un-manufactured tobacco, which are manufactured produced in-house by a registered person and used for "
      "the manufacture and production of goods on which duty of excise is paid by such person.", "Respective Headings.", 91, 94, 0),
+    ("17", "Goods for further manufacture of goods in the Export Processing Zones", "Respective Headings.", 92, 94, 0),
     ("19", "Materials and equipment (plant, machinery, equipment, appliances and accessories) for construction and operation of Gwadar "
      "Port and development of Free Zone for Gwadar Port as imported by or supplied to China Overseas Ports Holding Company Limited "
      "(COPHCL) and its operating companies namely (i) China Overseas Ports Holding Company Pakistan (Private) Limited, (ii) Gwadar "

@@ -606,6 +606,20 @@ def main():
     if set(red25) != expected25:
         f25.append(dict(check="red_vs_finance_act_2025", fy="FY2025-26", table="I", s_no="", sub="", page="", severity="warning",
                         detail=f"red serials in the 2025 consolidation {sorted(red25)} vs Finance Act 2025 s.11(8) (page 118 image): {sorted(expected25)}"))
+    for year, rr, ff in (("2025", r25, f25), ("2026", r26, f26)):
+        auto = {it["s_no"].lower() for it in third_schedule(year)}
+        if "117" in auto:      # footnote mark 1 glued to serial 17 in the text layer ('1' + '17')
+            auto = (auto - {"117"}) | {"17"}
+        spec = {r["s_no"].lower() for r in rr if r["table_no"] == "Third-I"}
+        omitted3 = {"2", "3a", "5", "7", "8", "18"}   # printed '***' / omitted markers in Table-I of the Third Schedule
+        reports[f"third_schedule_{year}"] = dict(spec=sorted(spec), coordinates_only=sorted(auto - spec - omitted3), spec_not_found=sorted(spec - auto))
+        for sno in sorted(spec - auto):
+            ff.append(dict(check="third_anchor_vs_spec", fy=S.YEARS[year]["fy"], table="Third-I", s_no=sno, sub="", page="", severity="warning",
+                           detail="serial in spec but the coordinate reader found no anchor (S.No 17 is printed with a footnote mark glued to it and "
+                                  "its row is merged into S.No 16 by the reader); text checked against the page image"))
+        for sno in sorted(auto - spec - omitted3):
+            ff.append(dict(check="third_anchor_vs_spec", fy=S.YEARS[year]["fy"], table="Third-I", s_no=sno, sub="", page="", severity="error",
+                           detail="serial found by coordinates but missing from spec (live exemption not loaded)"))
     diffs = diff_years(r25, r26, red26, red25, f26)
     all_rows = r25 + r26
     all_fails = f25 + f26
