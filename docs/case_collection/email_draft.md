@@ -1,34 +1,29 @@
-# Draft messages (edit before sending; you send them, not me)
+# Email to a senior FBR / Pakistan Customs member (edit the [brackets], then send it yourself)
 
-## To your friend or his clearing agent (short, informal)
+**Send to:** the official address or office you find on fbr.gov.pk for the Member Customs (Policy) / Member Customs (Operations), or the Chief Collector / Director of the classification and tariff office. Ask your friend's clearing agent for an introduction if you can; a warm introduction works far better than a cold email. Attach: a one-page description of the tool (screenshots once the UI exists) and, if you like, the evaluation summary.
 
-Subject: Help for my final-year project: real HS code examples (no names needed)
+---
 
-Assalam-o-alaikum [Name],
+**Subject:** Free public tool for importers on PCT classification and duty/tax: request for permission and guidance
 
-I am building an AI assistant for my university project that finds the correct 8-digit Pakistan Customs Tariff code for an imported product and calculates the duty and taxes, with the tariff page and SRO behind every number. It only covers FY2025-26 and FY2026-27.
+Respected Sir,
 
-To test it fairly I need real examples of products with the code that Customs finally accepted. Could you share 30 to 50 products you import (textiles and electronics are perfect)? For each one I only need: the product description as on the invoice, the month of import, and the final 8-digit code. Please leave out company names, GD numbers and prices. If a code was ever changed by Customs or by your agent, please tell me both codes: those are the most useful cases.
+Assalam-o-alaikum. My name is Maaz Ahmed, a software developer in [city]. I am building a free, public tool that helps Pakistani importers, especially small and first-time importers, understand the rules that apply to their own goods, in plain language, without needing to read hundreds of pages of notifications.
 
-I have a ready sheet: just fill in the columns (or send photos of the lines and I will type them). I will only use the examples for testing this project and will not share them with anyone.
+**What the tool does.** An importer describes the product and the import date. The tool finds the 8-digit PCT code (and says "I'm not sure" and asks questions when the description is not enough), then shows the customs duty, regulatory duty, additional customs duty, sales tax, income tax and, where it applies, federal excise duty for FY2025-26 and FY2026-27. Every figure is calculated by fixed rules in code, not guessed by AI, and each one carries the tariff page, SRO number and clause it comes from. It refuses to help with misdeclaration, never invents a code, rate or SRO number, and states clearly that it is information, not an official ruling and not advice. It does not file Goods Declarations and does not act as a customs agent.
 
-Thank you!
-[Your name]
+**Why I am writing.** The tool depends entirely on FBR's published documents: the Customs Tariff, the SROs, the Sales Tax and Income Tax schedules, the Finance Acts and the Classification and Valuation rulings. It already uses them with the source file and page quoted for every fact. I want to do this properly and with your office's knowledge, so I respectfully ask for:
 
-## To an official FBR / Customs contact (formal; use the official contact page on fbr.gov.pk or an introduction)
+1. **Permission.** Written permission, or confirmation of no objection, to use FBR's published tariff, SROs, public notices and rulings in a free public tool, always with a link to the original source and a notice that the FBR documents prevail. I understand the website terms allow copying of unmodified pages for sharing information free of cost; because the tool shows summaries and calculations built from those documents, I would like to be certain it is acceptable.
+2. **Authoritative data files** (so the tool is correct and current, and so I do not have to read scans): the current Pakistan Customs Tariff as a spreadsheet; a consolidated list, with effective dates, of the regulatory duty, additional customs duty and concession SROs (including the FTA/PTA concessions such as China-Pakistan FTA, which matter a great deal for ordinary importers); the full text of all Customs classification and valuation rulings, and the WeBOC rulings database if it can be shared; and any official note on how the national 8-digit lines are split.
+3. **Validation.** One officer or reviewer who could check 40 to 50 test products and the code the tool gives, and answer a few legal questions that I could not settle from the text: (a) the base for the 3% value-addition sales tax at import; (b) federal excise duty on electric vehicles and on engines above 3000 cc; (c) whether further tax applies at import for unregistered importers; (d) the rounding rule in WeBOC assessments; (e) the sugar import window of December 2025 to February 2026 after SRO 663(I)/2026.
+4. **Guidance on presentation.** How you would like the tool to describe itself so that nobody mistakes it for an official FBR service.
 
-Subject: Request for guidance: student project on PCT classification (FY2025-26 / FY2026-27)
+I will keep the tool free and open about its accuracy: the results and the method are published, errors are reported, and importers' personal data is not collected. I would gladly share the evaluation results with your office, and I would be grateful for even ten minutes by phone or in person.
 
-Respected Sir/Madam,
-
-I am a computer science student at [university] building an open, non-commercial tool that helps importers find the 8-digit PCT code and compute customs duty, regulatory and additional duty, sales tax and income tax for FY2025-26 and FY2026-27, citing the tariff page, SRO number and clause for every figure. The tool refuses to help with misdeclaration and says "I'm not sure" when the classification is unclear.
-
-We use the Public Notices (Classification) published on the FBR website as precedents. Two requests, if your office can assist:
-
-1. Whether a small set (30 to 50) of classification decisions, or a reviewer who can check our test cases, can be made available for validation (no importer names needed).
-2. Whether our reading of the following points is correct: [list the open questions from docs/owner_questions.md, for example the 3% value-addition base for vehicles, FED on electric vehicles, 3001 cc].
-
-We would be grateful for any guidance or a person we may contact. We are glad to share the results.
+Thank you for your time and for the public service your office performs.
 
 Yours sincerely,
-[Name, university, contact]
+Maaz Ahmed
+[phone] | [email] | [city]
+[link to the project page or short demo, when available]
