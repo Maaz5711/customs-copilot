@@ -22,6 +22,7 @@ Shared columns: `status` in `accepted | needs_review | verified`.
 | `rd_rules` | one row per (SRO, S.No, code) | 1064: 698 rows from 687 S.Nos; 1152: 704 rows from 693 S.Nos |
 | `acd_rules` | one row per code or slab/regime clause | 314 (1063: 184, 1151: 130) |
 | `sales_tax_rules`, `income_tax_rules` | see contract | 906 / 652 |
+| `fed_rules` | one row per (serial, sub-clause, code) | 174 (FY2025-26: 80, FY2026-27: 94), A6 |
 | `legal_notes` | note_kind, scope, note_no, valid_from | 484 (dates assumed, label in `hs_edition`) |
 
 `tariff_lines`: `code` as printed, `code_norm` digits only, `level` 8 or 4 (Chapter 99), `cd_kind` `plain | specific | compound`, `cd_rate` (percent) or `cd_specific_amount` + `cd_specific_unit`, `cd_raw`, `rotated`, `note`.
@@ -91,3 +92,12 @@ Rules for producers: `code_norm` is digits only (`"01012100"`, not `"0101.2100"`
 - `legal_notes.hs_edition` carries the label "applicability to FY2025-26 and FY2026-27 assumed, not proven"; `valid_from` 2025-07-01, `valid_to` 9999-12-31.
 - Tariff headings: 1,228 per FY; 211 are derived from codes (`tariff_headings.text` may be empty, e.g. 11.03).
 - `legal_notes.table_json` (nullable, json_valid): structured table of a note whose flattened `text` is ambiguous (Chapter 11 note 2, Chapter 48 subheading notes 1 and 2); `text` is kept unchanged. Source: `data/processed/legal_notes_tables.json`.
+
+## A6 additions: `fed_rules` (federal excise duty, see docs/a6_fed_findings.md)
+Loaded from `data/processed/a6_fed_rules.csv` (`python -m src.ingest.a6_fed` writes it; `load_table_file(conn, 'fed_rules', ...)`). Same hard rule: `valid_from/valid_to/source_file/page` NOT NULL with CHECKs; `status` accepted | needs_review.
+* Hierarchical columns as in the other rule tables; `HIER_TABLES` includes `fed_rules`, so `get_rule_on_date(conn, 'fed_rules', code8, date)` works. `rule_group`: `FED-T1` (Table I rates, longest prefix wins), `FED-T1A` (Table IA Special Excise Duty, cumulative with Table I), `FED-T3` (First Schedule Table III), `FED-3RD-SCHEDULE` (conditional exemptions).
+* Rows whose heading column prints "Respective heading(s)" are `match_level='unmapped'` (code_norm NULL): they never match a code lookup.
+* `rate_kind`: `percent` (+ `rate_basis` ad_valorem | retail_price), `specific` (amount + unit: kg, 1000 cigarettes, 100 m3, MMBTu, 100 MT, liter, fan, DOC), `compound` (`compound_rule='higher_of'`: percent part and specific part), `exempt` (Third Schedule, condition text in `condition_text`).
+* Bands: `cc_ge`, `cc_gt`, `cc_le` (engine capacity in cc), `usd_gt`, `usd_le` (section 25 value in USD). `applies_to`: import_only | local_only | import_and_local | unclear. `amended_by` cites the Finance Act clause for rows that differ from the previous year.
+* Helper `src.store.resolve.get_fed_on_date(conn, code8, date)` splits the result into applicable Table I / IA rows, local-only rows (never applied to imports) and possible exemptions (never applied by the store).
+* FY2025-26 rows: 2025-07-01 to 2026-06-30 (FED25 snapshot); FY2026-27 rows: 2026-07-01 to 9999-12-31 (FED26). No mid-year notification is loaded.

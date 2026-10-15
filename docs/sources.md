@@ -35,6 +35,14 @@ Layer: T = text layer usable, S = scan (vision extraction), M = mixed/embedded O
 | Income Tax Ordinance 2001 up to 31.07.2025, 20.02.2026, 2026-07 | 2025881983148210..., 2026226162211364..., 2026724177725705... | T | HAVE (s.148 location to confirm) |
 | SRO 1216(I)/2025, 1833(I)/2025, 455(I)/2026 | 2025791374222561SRO1216-2025.pdf, 2025923149161117Sro1833IncomeTax.pdf, 202635143564166SRO455.pdf | M | HAVE |
 
+## Federal excise duty (FED), added by A6
+| Document | File | Layer | Status |
+|---|---|---|---|
+| Federal Excise Act 2005, as amended up to 30 June 2026 (Finance Act 2026 in red), 103 pp | 20267171373633512FEDAct2005updatedupto30-06-2026.pdf | T | HAVE, parsed (A6): First Schedule Table I / IA / III (pp.70-80, 86), Third Schedule Table-I goods (pp.88-100); FY2026-27 |
+| Federal Excise Act 2005, as amended up to 30 June 2025 (Finance Act 2025 in red), 105 pp | 202588138517680FEDAct,2005withindexupdatedupto30-06-2025.pdf | T | HAVE, parsed (A6): Table I (pp.72-82), Table III (p.88), Third Schedule (pp.90-102); FY2025-26 |
+| Finance Act 2025 (FED amendments: s.11, file pp.116-118, scan) and Finance Act 2026 (s.6, file pp.63-76, text) | see Budget | S / T | HAVE, used as second source and to explain the year-to-year differences |
+| Not in data/raw: FED notifications (SROs) of FY2025-26 / FY2026-27, Board orders under s.3(3B) | | | NOT COLLECTED (Chrome prompt `docs/chrome_prompt_fed.md` not yet answered) |
+
 ## Budget
 Finance Act 2025, Finance Act 2026, Finance Bill 2025, Finance Bill 2026, Salient Features 2026-27: HAVE.
 
