@@ -112,6 +112,8 @@ def main(argv=None):
     ap.add_argument("--rerun-errors", action="store_true")
     ap.add_argument("--report", action="store_true", help="only rebuild the report")
     ap.add_argument("--llm", choices=("gemini", "deepseek"), default="gemini", help="which provider answers; results are kept in a folder per provider")
+    ap.add_argument("--classify-model", help="DeepSeek model for the Classify step only (for example deepseek-v4-pro)")
+    ap.add_argument("--classify-thinking", choices=("enabled", "disabled"), help="DeepSeek thinking mode for the Classify step only")
     ap.add_argument("--tag", default="", help="results folder suffix, for example hints -> data/processed/eval/deepseek_hints")
     ap.add_argument("--out", type=Path, default=None)
     a = ap.parse_args(argv)
@@ -119,7 +121,8 @@ def main(argv=None):
     if not a.report:
         from src.agent import DeepSeekLLM, GeminiLLM
 
-        llm = (DeepSeekLLM if a.llm == "deepseek" else GeminiLLM)(max_calls=a.max_llm_calls)
+        ov = {k: v for k, v in (("model", a.classify_model), ("thinking", a.classify_thinking)) if v}
+        llm = DeepSeekLLM(max_calls=a.max_llm_calls, overrides={"classify": ov} if ov else None) if a.llm == "deepseek" else GeminiLLM(max_calls=a.max_llm_calls)
         cases = select(load_cases(tuple(k for k in a.kinds if k != "duty")) + (load_duty_cases() if "duty" in a.kinds else []), a.sample, a.seed, a.ids)
         res = run(a.systems, cases, llm, a.out, a.rerun_errors)
         print(res, "| live calls:", llm.stats["live_calls"], "cache hits:", llm.stats["cache_hits"], "| tokens in/out:", llm.stats.get("tokens_in"), llm.stats.get("tokens_out"))
