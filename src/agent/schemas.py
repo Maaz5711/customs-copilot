@@ -69,6 +69,7 @@ def validate_understand(d: Any) -> dict:
         "manufacturer_in_house_use": as_bool(d.get("manufacturer_in_house_use")), "manufacturer_quote": as_str(d.get("manufacturer_quote")),
         "date_text": as_str(d.get("date_text")), "codes_text": [s for s in (as_str(c, 40) for c in as_list(d.get("codes_text"))) if s],
         "multiple_products": bool(as_bool(d.get("multiple_products"))), "off_topic": bool(as_bool(d.get("off_topic"))),
+        "misdeclaration_intent": bool(as_bool(d.get("misdeclaration_intent"))), "misdeclaration_quote": as_str(d.get("misdeclaration_quote")),
     }
 
 

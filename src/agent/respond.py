@@ -295,9 +295,12 @@ def render_not_sure(state: dict) -> dict:
 def render_refusal(state: dict) -> dict:
     ref = state.get("refusal") or {}
     lo, hi = ref.get("supported", ("2025-07-01", "2027-06-30"))
+    kind = ref.get("kind", "date")
+    scope = {"date": f"I only cover dates from {lo} to {hi} (FY2025-26 and FY2026-27), because the tariff, the SROs and the tax rules I use stop there. ",
+             "misdeclaration": "", "off_topic": "I answer questions about the PCT code and the customs duty, sales tax and income tax on imported goods, for dates from "
+                                                f"{lo} to {hi}. "}.get(kind, "")
     lines = ["I can't answer this question.", "", f"Reason: {ref.get('reason', 'out of scope')}", "",
-             f"I only cover dates from {lo} to {hi} (FY2025-26 and FY2026-27), because the tariff, the SROs and the tax rules I use stop there. "
-             "I did not search or calculate anything.", "", DISCLAIMER]
+             scope + "I did not search or calculate anything.", "", DISCLAIMER]
     return {"status": "refused", "text": "\n".join(lines), "code": None, "as_of_date": state.get("as_of_date"), "confidence": None, "candidates": [],
             "bill": None, "citations": [], "flags": [], "assumptions": [], "unverified": [], "verification": None, "disclaimer": DISCLAIMER, "refusal": ref}
 

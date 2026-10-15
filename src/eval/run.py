@@ -112,9 +112,10 @@ def main(argv=None):
     ap.add_argument("--rerun-errors", action="store_true")
     ap.add_argument("--report", action="store_true", help="only rebuild the report")
     ap.add_argument("--llm", choices=("gemini", "deepseek"), default="gemini", help="which provider answers; results are kept in a folder per provider")
+    ap.add_argument("--tag", default="", help="results folder suffix, for example hints -> data/processed/eval/deepseek_hints")
     ap.add_argument("--out", type=Path, default=None)
     a = ap.parse_args(argv)
-    a.out = a.out or OUT / a.llm
+    a.out = a.out or OUT / (a.llm + ("_" + a.tag if a.tag else ""))
     if not a.report:
         from src.agent import DeepSeekLLM, GeminiLLM
 
@@ -124,7 +125,7 @@ def main(argv=None):
         print(res, "| live calls:", llm.stats["live_calls"], "cache hits:", llm.stats["cache_hits"], "| tokens in/out:", llm.stats.get("tokens_in"), llm.stats.get("tokens_out"))
     from .report import write_report
 
-    write_report(a.out, Path(f"docs/eval_report_{a.llm}.md"), a.llm)
+    write_report(a.out, Path(f"docs/eval_report_{a.llm}{"_" + a.tag if a.tag else ""}.md"), a.llm)
 
 
 if __name__ == "__main__":
