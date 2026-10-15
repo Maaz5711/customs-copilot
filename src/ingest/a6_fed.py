@@ -713,11 +713,16 @@ def write_outputs(rows, fails, reports, diffs):
         "IA": "Special Excise Duty is in addition to Table-I duty (s.3(3B)); Table IA names 'electric vehicles (4 wheelers)' and double cabin pickups with engine-capacity bands, "
               "and the Board may prescribe the time and manner of collection (no such notification is in data/raw);",
     }
+    # owner checked these cards against the page and answered 'ok' (review_results/fed_15_cards-results.csv, 2026-10-15).
+    # Only serials with no open interpretation flag become verified: the owner confirmed the printed text, not the legal reading.
+    OWNER_OK = {("FY2026-27", "I", s) for s in ("55C", "9", "8a", "7a", "13", "65", "63", "32", "4", "3")}
     for r in rows:
         key = r["s_no"] if r["table_no"] == "I" else ("IA" if r["table_no"] == "IA" else None)
         if key in OPEN:
             r["issues"] += OPEN[key]
             r["status"] = "needs_review"
+        elif (r["fy"], r["table_no"], r["s_no"]) in OWNER_OK and r["status"] == "accepted":
+            r["status"] = "verified"
         if r["match_level"] == "unmapped" and r["table_no"] != "Third-I":
             r["issues"] += "heading column prints 'Respective heading(s)': no code, stored unmapped (never matches a code lookup);"
     with open(PROC / "a6_fed_rules.csv", "w", encoding="utf-8", newline="") as f:
