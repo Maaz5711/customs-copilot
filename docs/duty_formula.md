@@ -14,7 +14,7 @@ V    = assessable value                              Customs Act s.25 (value of 
 CD   = rate_CD  x V   (or specific Rs/unit)          Customs Act s.18(1) + First Schedule (Tariff, column CD)
 RD   = rate_RD  x V                                  Customs Act s.18(3): "% of the value of such goods as determined under section 25"
 ACD  = rate_ACD x V                                  Customs Act s.18(5): "% of value of such goods as determined under section 25"
-FED  = (out of scope, see OPEN-1)
+FED  = Table I rate x base (see section 7 below); SED (Table IA) in addition
 SCD  = (out of scope; Customs Act s.18A, never part of the sales tax base)
 
 V_ST = V + CD + RD + ACD + FED                       Sales Tax Act s.2(46)(d)  (see OPEN-2 for RD and ACD)
@@ -67,7 +67,7 @@ Rounding rules (to the rupee or paisa) are not in any provided document: **OPEN-
 
 ## 4. Open questions that block "done" (need a human with the law or a real Goods Declaration)
 
-- **OPEN-1 Federal excise duty.** s.2(46)(d) (sales tax) and Part II column (3) (income tax) both add "federal excise duty" to the base, and the budget
+- **OPEN-1 Federal excise duty (A6: data now in `fed_rules`, see section 7 and `docs/a6_fed_findings.md`; not yet in `compute_duty`).** s.2(46)(d) (sales tax) and Part II column (3) (income tax) both add "federal excise duty" to the base, and the budget
   salient features 2026-27 mention new FED on luxury vehicles. The Federal Excise Act and its First Schedule are not in `data/raw/`, and FED is outside the
   stated v1 scope. Until supplied, V_ST and V_IT omit FED and the tool must warn for vehicles and other FED goods.
 - **OPEN-2 Are RD and ACD part of "customs-duties" in s.2(46)(d)?** The Sales Tax Act text says "including the amount of customs-duties and federal excise duty"
@@ -123,3 +123,18 @@ different groups are cumulative and all come back. Rows still need a caller deci
 * **Used vehicles.** SRO 1898 (40%, 1 Oct 2025 to 29 Jun 2026) and SRO 1065 (30%, from 30 Jun 2026) are separate "in addition" lines on V, applied only when the caller says the import is a used-vehicle commercial import under the Import Policy Order clause (xvi).
 * **ACD slab.** SLAB_EQ n needs tariff CD = n; SLAB_GE n needs tariff CD >= n or a specific-rate line. Rows with an `except` list in the same SRO are carved out by the store before the slab test.
 Full list of inputs, statuses and limits: `docs/tools.md`.
+
+## 7. FED at import (A6, DRAFT; compute_duty not yet changed: spec in `docs/a6_fed_findings.md` section 6)
+Files: `FED26` = `20267171373633512FEDAct2005updatedupto30-06-2026.pdf`, `FED25` = `202588138517680FEDAct,2005withindexupdatedupto30-06-2025.pdf`. Rates are in table `fed_rules` (`a6_fed_rules.csv`).
+```
+FED_T1  = rate x base      base = V + CD + RD + ACD            FED Act s.12(3) p.20 "value ... section 25 of the Customs Act ... including customs duties payable thereon"
+                           retail-price goods: base = retail price on the pack (s.12(4) and proviso p.20-21); specific rates: Rs x quantity
+SED     = Table IA rate x base (additional to FED_T1)          s.3(3B) p.13, Table-IA p.80 (base not stated: open, OQ-A6-2)
+V_ST    = V + CD + RD + ACD + FED_T1 + SED                     Sales Tax Act s.2(46)(d) p.25 (FED is named in the value of supply)
+V_IT    = V + CD + RD + ACD + FED_T1 + SED + ST (+VAT)         ITO First Schedule Part II column (3) "customs-duty, sales tax and federal excise duty"
+```
+* Levy and collection: s.3(1)(b) p.11-12; collected by Customs like customs duty, s.3(2) p.12; importer liable, s.3(5)(b) p.13. Goods not in the First Schedule are exempt, s.16(1) p.24 (so the 15% default of s.3(1) never applies to an unlisted import).
+* Order: FED comes after CD, RD, ACD and before sales tax and income tax. The statement "FED included in the sales tax and income tax bases" is in the two laws already cited above (sales tax s.2(46)(d), ITO Part II); nothing in the FED Act changes the sales-tax or income-tax base wording, so sections 1-3 above stay as written with FED no longer "out of scope".
+* Whether "customs duties" in s.12(3) includes RD and ACD is the same inference as OPEN-2.
+* Tables: First Schedule Table I (rates, `FED26` pp.70-78, `FED25` pp.72-81), Table IA (SED, new from 1 Jul 2026, `FED26` p.80), Third Schedule (conditional exemptions, `FED26` pp.88-100), Second Schedule (sales tax mode, p.87). Interpretation under Table I: description prevails over tariff classification, rate applies to imports (`FED26` pp.78-79).
+* Rounding and date of rate: not stated for imports (OQ-A6-6).

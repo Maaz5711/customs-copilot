@@ -76,3 +76,6 @@ No mismatch and no unsure rows. Points worth knowing (all marked match):
 - Heading codes 8703/8704 on the vehicle rows (clauses (ii)(b)(ii), (iv)(b), 3(x)) are a mapping of the printed words (cars, jeeps, LCV, heavy commercial vehicles); the headings themselves are not printed.
 - 1151 3(iii) lists Part III S.No 110 as excluded; 1063 3(iii) does not. The store matches both.
 - The CSV cells are cut at 80 characters, so the full parsed text of long rows was checked in `a3_acd_rules.json`.
+
+## FED spot check (A6)
+**AI second reader (Claude), not owner verification.** `data/processed/ai_second_read/spotcheck_a6_fed.csv`: 51 rows of `spotcheck_a6_fed.csv` read from the page images of the two Federal Excise Act files (`data/processed/page_images/fed25|fed26`). 45 match, 0 mismatch, 6 unsure (S.No 35 prints 2711.1900, a code that is not in the tariff, stored as a 6-digit prefix; four Third Schedule rows of the FY2025-26 file whose images were not viewed). The 15 cards in `fed_15_cards.html` were included in this read; the owner still has to check them.
