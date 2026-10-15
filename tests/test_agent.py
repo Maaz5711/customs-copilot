@@ -334,7 +334,9 @@ def test_missing_inputs_trigger_clarify_instead_of_a_number(db):
     assert t2.final["status"] == "answer"
     direct = compute_duty("8703.2113", 2000000, D15, importer=IMP_RC, goods={"vehicle_form": "CBU", "engine_cc": "1300", "used_vehicle_commercial_import_ipo": False}, db_path=db)
     assert direct["status"] == "computed" and f"{int(float(direct['totals']['total_payable_pkr'])):,}" in t2.final["text"]
-    assert "Federal excise duty is NOT in this bill" in t2.final["text"] and any("FED_not_included" in f for f in t2.final["flags"])
+    # changed expectation (A6): this car (1300 cc, CBU) now carries FED (Table I S.No 55(b)), so the old "FED is NOT in this bill" wording is gone
+    assert "Federal excise duty is NOT in this bill" not in t2.final["text"] and "[FED]" in t2.final["text"]
+    assert any(ln["tax"] == "FED" for ln in t2.final["bill"]["lines"])
     assert "The code was given by you" in t2.final["text"] and llm.count("classify") == 0 and llm.count("verify") == 0
 
 

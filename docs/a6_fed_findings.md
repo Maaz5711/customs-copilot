@@ -98,7 +98,7 @@ Table I 55 rates (2.5 / 10 / 30 / 40%) did not change between the two files.
 | OQ-A6-8 | S.No 35: printed 2711.1900; confirm the mapping to 2711.1910 and 2711.1990. Third Schedule S.No 6 prints 2710.1110 (not in either tariff). |
 | OQ-A6-9 | Mid-year FED notifications (SROs) for FY2025-26 / FY2026-27 are not in `data/raw`. |
 
-## 6. Ready-to-apply spec for `compute_duty` (do NOT apply yet; `src/tools` untouched)
+## 6. Spec for `compute_duty` (APPLIED: `src/tools/fed.py`, tests `tests/test_fed_compute.py`; the 54 unmapped rows: 16 mapped by description, 38 left, see `a6_fed_mapping.csv`)
 
 Store: `fed_rules` (docs/store_schema.md "A6 additions"), helper `src.store.resolve.get_fed_on_date(conn, code8, date)` returning `applicable_first_schedule`, `local_only_not_applied`, `possible_exemptions`.
 

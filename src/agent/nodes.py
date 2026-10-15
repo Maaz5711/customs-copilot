@@ -706,11 +706,13 @@ def bill_checks(duty: dict | None, lookup: dict | None, date_iso: str) -> tuple[
         issues.append("a bill line has no complete citation (instrument, clause, file, page, dates)")
     if duty["status"] == "computed":
         tot = duty["totals"]
-        s = {"customs_duties": Decimal(0), "sales_tax": Decimal(0), "income_tax": Decimal(0)}
+        s = {"customs_duties": Decimal(0), "federal_excise_duty": Decimal(0), "sales_tax": Decimal(0), "income_tax": Decimal(0)}
         for ln in lines:
             a = Decimal(ln["amount_pkr"])
             if ln["tax"] in ("CD", "RD", "RD_USED_VEHICLE", "ACD"):
                 s["customs_duties"] += a
+            elif ln["tax"] in ("FED", "SED"):
+                s["federal_excise_duty"] += a
             elif ln["tax"] in ("ST", "VAT"):
                 s["sales_tax"] += a
             elif ln["tax"] == "IT":

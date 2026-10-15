@@ -37,9 +37,9 @@ def pick(res, s_no, sub=None):
 def test_counts_match_csv(db):
     c, rep = db
     csv_rows = list(csv.DictReader(open(PROC / "a6_fed_rules.csv", encoding="utf-8")))
-    assert rep["fed_rules"] == len(csv_rows)
-    for fy in ("FY2025-26", "FY2026-27"):
-        n = c.execute("SELECT COUNT(*) FROM fed_rules WHERE fy = ?", (fy,)).fetchone()[0]
+    assert rep["fed_rules"] == len(csv_rows) and rep["fed_rules_mapped"] == 34
+    for fy in ("FY2025-26", "FY2026-27"):      # rows derived from the description-match mapping are counted separately (test_mapping_*)
+        n = c.execute("SELECT COUNT(*) FROM fed_rules WHERE fy = ? AND issues NOT LIKE '%mapped by description match%'", (fy,)).fetchone()[0]
         assert n == sum(1 for r in csv_rows if r["fy"] == fy)
     # Table IA exists only in the FY2026-27 file (Finance Act 2026), serial 55A and 65 too; serial 64 (Finance Act 2025) in both
     q = lambda sql, *a: {tuple(r) for r in c.execute(sql, a)}
@@ -184,10 +184,10 @@ def test_date_boundary_new_serials_30_june_vs_1_july_2026(db):
 def test_acetate_tow_and_eliquid_changes_are_unmapped_but_dated(db):
     c, _ = db
     # S.No 7a: Rs. 44000 (FY2025-26 p.73) -> Rs. 10000 (FY2026-27 p.71): Finance Act 2026 s.6(14)(1)(a)
-    rows = c.execute("SELECT fy, rate_specific_amount, page FROM fed_rules WHERE s_no = '7a' ORDER BY fy").fetchall()
+    rows = c.execute("SELECT fy, rate_specific_amount, page FROM fed_rules WHERE s_no = '7a' AND match_level = 'unmapped' ORDER BY fy").fetchall()
     assert [tuple(r) for r in rows] == [("FY2025-26", 44000, 73), ("FY2026-27", 10000, 71)]
     # S.No 8a: 'Rupees ten thousand per kg or sixty five percent of retail price whichever is higher' -> Rs. 16500 per kg
-    r = c.execute("SELECT fy, rate_kind, rate_pct, rate_specific_amount FROM fed_rules WHERE s_no = '8a' ORDER BY fy").fetchall()
+    r = c.execute("SELECT fy, rate_kind, rate_pct, rate_specific_amount FROM fed_rules WHERE s_no = '8a' AND match_level = 'unmapped' ORDER BY fy").fetchall()
     assert [tuple(x) for x in r] == [("FY2025-26", "compound", 65, 10000), ("FY2026-27", "specific", None, 16500)]
 
 
@@ -205,7 +205,7 @@ def test_cigarettes_import_rate_by_reference(db):
 def test_unmapped_rows_never_match(db):
     c, _ = db
     n = c.execute("SELECT COUNT(*) FROM fed_rules WHERE match_level = 'unmapped'").fetchone()[0]
-    assert n >= 40
+    assert n == 54      # 174 rows; 16 of the 54 were also mapped to codes as extra rows (test_mapping_*), the originals stay unmapped
     assert c.execute("SELECT COUNT(*) FROM fed_rules WHERE match_level = 'unmapped' AND code_norm IS NOT NULL").fetchone()[0] == 0
     unmapped_ids = {r[0] for r in c.execute("SELECT id FROM fed_rules WHERE match_level = 'unmapped'")}
     tariff = json.loads((PROC / "tariff_2026_27.json").read_text(encoding="utf-8"))
@@ -214,8 +214,12 @@ def test_unmapped_rows_never_match(db):
         for date in ("2025-12-01", "2026-07-15"):
             got = get_rule_on_date(c, "fed_rules", code, date)
             assert not any(r["id"] in unmapped_ids for r in got)
-    # fertilizers (S.No 62, 'Respective heading') do not attach to a Chapter 31 code
-    assert get_fed_on_date(c, "31021000", "2026-07-15") == {"applicable_first_schedule": [], "local_only_not_applied": [], "possible_exemptions": []}
+    # changed expectation (A6 mapping): fertilizers (S.No 62) are now matched through the mapping rows, never through the unmapped original
+    got = get_fed_on_date(c, "31021000", "2026-07-15")["applicable_first_schedule"]
+    assert [(r["s_no"], r["match_level"], r["status"]) for r in got] == [("62", "heading4", "needs_review")]
+    # serials left unmapped (filter rod S.No 56, sugary juices 59, aerated waters from juices 6, electric cars 55A) still match nothing
+    for code in ("55029090", "20091100", "87038090"):
+        assert [r["s_no"] for r in get_fed_on_date(c, code, "2026-07-15")["applicable_first_schedule"] if r["s_no"] in ("56", "59", "6", "55A")] == []
 
 
 # ------------------------------------------------------------------------------------------- Third Schedule and validators

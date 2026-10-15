@@ -39,6 +39,8 @@ def describe_line(ln: dict) -> str:
         return f"{r.get('pct')}% of {fmt_money(ln.get('base_pkr'))} ({ln.get('base_label')})"
     if k == "specific":
         return f"Rs {fmt_money(r.get('amount_pkr'))} per {r.get('unit')} x {r.get('quantity')} {r.get('unit')}"
+    if k == "compound":
+        return f"higher of {r.get('pct')}% of retail price {fmt_money(ln.get('base_pkr'))} and Rs {fmt_money(r.get('amount_pkr'))} per {r.get('unit')} x {r.get('quantity')} {r.get('unit')}"
     if k == "exempt":
         return "exempt / not levied"
     return str(r)
@@ -80,8 +82,10 @@ def unverified_items(state: dict, duty: dict | None) -> list[str]:
         if c.get("needs_review"):
             items.insert(3, f"{c['needs_review']} line(s) of this bill are marked needs_review: the reading failed a check or is an unconfirmed inference. Treat them as doubtful.")
         ids = {a["id"] for a in duty.get("assumptions", [])}
-        if "FED" in ids:
-            items.append("Federal excise duty is NOT in this bill (its source law is not in the data). For vehicles and other excisable goods the real bill is higher.")
+        if any(ln.get("tax") in ("FED", "SED") for ln in duty.get("lines", [])):
+            items.append("Federal excise duty lines were read from the Federal Excise Act PDFs by a parser and checked by validators; rows marked needs_review, mapped by description, or the Special Excise Duty base are not confirmed by an expert.")
+        elif "FED" in ids:
+            items.append("No federal excise duty row matched this code. Serials printed without a tariff code and not mapped, and any FED notification issued during the year, are not checked.")
     items.append("Retrieved rulings and public notices (if any are listed under SOURCES) are shown for information and were not applied automatically.")
     return items
 
@@ -181,7 +185,8 @@ def render_answer(state: dict, verification: dict | None = None) -> dict:
     if status == "answer":
         t = duty["totals"]
         lines_out.append(f"  TOTAL PAYABLE: PKR {fmt_money(t['total_payable_pkr'])}")
-        lines_out.append(f"    customs duties (CD, RD, ACD): {fmt_money(t['customs_duties'])}; sales tax (ST and value addition tax): {fmt_money(t['sales_tax'])}; income tax: {fmt_money(t['income_tax'])}")
+        lines_out.append(f"    customs duties (CD, RD, ACD): {fmt_money(t['customs_duties'])}; sales tax (ST and value addition tax): {fmt_money(t['sales_tax'])}; income tax: {fmt_money(t['income_tax'])}"
+                         + (f"; federal excise duty (FED, SED): {fmt_money(t['federal_excise_duty'])}" if t.get('federal_excise_duty') is not None else ""))
     else:
         lines_out.append("  NO TOTAL IS GIVEN because these items could not be computed:")
         for c in duty.get("cannot_compute", []):

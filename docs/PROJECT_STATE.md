@@ -15,7 +15,7 @@ Customs Copilot (Pakistan): an agent that picks the 8-digit PCT code and compute
 | Tariffs FY25-26, FY26-27 | src/ingest/tariff.py, data/processed/tariff_*.json | done; description bug being fixed (sub-group headers attached to the row above) |
 | RD, ACD, used-vehicle SROs | a2/a3 files, docs/a2_sro_findings.md | done; owner checked about 230 rows, 0 errors |
 | Sales tax, income tax | docs/a3_findings.md | done; mobile phones, sugar, formula rates, Chapter 99 cannot be computed |
-| FED | docs/a6_fed_findings.md | loaded (174 rows); not yet applied in compute_duty (spec in section 6) |
+| FED | docs/a6_fed_findings.md, src/tools/fed.py | loaded (174 rows + 34 mapped-by-description rows); applied in compute_duty; EV, 3001 cc, CKD refused |
 | Legal notes (HS 2022) | docs/a4_findings.md | done, applicability assumed |
 | Dated store | src/store, docs/store_schema.md | done; every fact row has valid_from, valid_to, source_file, page |
 | Search (BM25 + dense + rerank) | src/search, docs/search_notes.md | done, 4 indexes |

@@ -124,18 +124,21 @@ def test_hand_4_used_vehicle_sro_1065_with_sro_297_25_percent():
     # the RD of SRO 1064 (para 2) -> a separate line.
     # ACD: slab 30% is in "25% and higher" -> 4% (SRO 1063 p.1 (ii)); 3(x) does not apply (CBU, 1300 cc > 850 cc).
     # CD = 30% x 2,000,000 = 600,000 ; RD(1065) = 30% x 2,000,000 = 600,000 ; ACD = 4% x 2,000,000 = 80,000
-    # V_ST = 2,000,000 + 600,000 + 600,000 + 80,000 = 3,280,000
-    # ST = 25% (SRO 297(I)/2023 Table-I S.No 3 p.1 lists 8703.2113 "Vehicles in CBU condition") x 3,280,000 = 820,000
-    # VAT = 3% x 3,280,000 = 98,400 (cond. (2)(xiv) excludes only motor cars up to 850 cc)
-    # V_IT = 3,280,000 + 820,000 + 98,400 = 4,198,400 ; IT = 6% (Part III: only CKD *components* of 87.03 are in Part II) = 251,904
-    # total = 600,000 + 600,000 + 80,000 + 820,000 + 98,400 + 251,904 = 2,450,304
+    # FED (added in A6): Federal Excise Act First Schedule Table I S.No 55(b), FY2026-27 file p.75: imported cars 1001cc to 1799cc = 10% ad valorem
+    #   on the value incl. customs duties (s.12(3) p.20): 10% x (2,000,000 + 600,000 + 600,000 + 80,000) = 10% x 3,280,000 = 328,000. 1300 cc < 2000 cc: no Table IA.
+    # V_ST = 3,280,000 + 328,000 = 3,608,000
+    # ST = 25% (SRO 297(I)/2023 Table-I S.No 3 p.1 lists 8703.2113 "Vehicles in CBU condition") x 3,608,000 = 902,000
+    # VAT = 3% x 3,608,000 = 108,240 (cond. (2)(xiv) excludes only motor cars up to 850 cc)
+    # V_IT = 3,608,000 + 902,000 + 108,240 = 4,618,240 ; IT = 6% (Part III: only CKD *components* of 87.03 are in Part II) = 277,094.40
+    # total = 600,000 + 600,000 + 80,000 + 328,000 + 902,000 + 108,240 + 277,094.40 = 2,895,334.40
     goods = {"vehicle_form": "CBU", "engine_cc": 1300, "used_vehicle_commercial_import_ipo": True}
     res = compute_duty("8703.2113", 2000000, "2026-07-15", importer=IMP, goods=goods)
-    check(res, {"CD": "600000.00", "RD": "0.00", "RD_USED_VEHICLE": "600000.00", "ACD": "80000.00", "ST": "820000.00", "VAT": "98400.00", "IT": "251904.00"}, "2450304.00")
+    check(res, {"CD": "600000.00", "RD": "0.00", "RD_USED_VEHICLE": "600000.00", "ACD": "80000.00", "FED": "328000.00", "ST": "902000.00", "VAT": "108240.00", "IT": "277094.40"}, "2895334.40")
     used = [ln for ln in res["lines"] if ln["tax"] == "RD_USED_VEHICLE"][0]
     assert used["instrument"] == "1065(I)/2026" and used["page"] == 1
     assert "needs_review" in used["flags"]                      # 1065 prints no effective-date clause (OQ-A3-4)
-    assert any(f.startswith("FED_not_included") for f in res["flags"])
+    # changed expectation (A6): the old test asserted the flag "FED_not_included"; this vehicle now carries FED (S.No 55(b)), so the flag is gone
+    assert not any(f.startswith("FED_not_included") for f in res["flags"]) and "FED" in amounts(res)
 
 
 def test_hand_5_fy2025_26_date_used_vehicle_sro_1898():
@@ -143,12 +146,13 @@ def test_hand_5_fy2025_26_date_used_vehicle_sro_1898():
     # (from 1 Oct 2025), in addition to SRO 1152. SRO 1152: no row for 8703.2113.
     # ACD: SRO 1151(I)/2025 p.1 clause (iv): six percent on slab 30% and higher -> 6%.
     # CD = 1,000,000 ; RD(1898) = 800,000 ; ACD = 6% x 2,000,000 = 120,000
-    # V_ST = 2,000,000 + 1,000,000 + 800,000 + 120,000 = 3,920,000 ; ST = 25% (SRO 297 Table-I S.No 3) = 980,000 ; VAT = 3% = 117,600
-    # V_IT = 3,920,000 + 980,000 + 117,600 = 5,017,600 ; IT = 6% = 301,056
-    # total = 1,000,000 + 800,000 + 120,000 + 980,000 + 117,600 + 301,056 = 3,318,656
+    # FED (A6): Table I S.No 55(b), FY2025-26 file p.79: 1001-1799cc = 10% x (2,000,000 + 1,000,000 + 800,000 + 120,000) = 10% x 3,920,000 = 392,000
+    # V_ST = 3,920,000 + 392,000 = 4,312,000 ; ST = 25% (SRO 297 Table-I S.No 3) = 1,078,000 ; VAT = 3% = 129,360
+    # V_IT = 4,312,000 + 1,078,000 + 129,360 = 5,519,360 ; IT = 6% = 331,161.60
+    # total = 1,000,000 + 800,000 + 120,000 + 392,000 + 1,078,000 + 129,360 + 331,161.60 = 3,850,521.60
     goods = {"vehicle_form": "CBU", "engine_cc": 1300, "used_vehicle_commercial_import_ipo": True}
     res = compute_duty("8703.2113", 2000000, "2025-11-01", importer=IMP, goods=goods)
-    check(res, {"CD": "1000000.00", "RD": "0.00", "RD_USED_VEHICLE": "800000.00", "ACD": "120000.00", "ST": "980000.00", "VAT": "117600.00", "IT": "301056.00"}, "3318656.00")
+    check(res, {"CD": "1000000.00", "RD": "0.00", "RD_USED_VEHICLE": "800000.00", "ACD": "120000.00", "FED": "392000.00", "ST": "1078000.00", "VAT": "129360.00", "IT": "331161.60"}, "3850521.60")
     assert res["fy"] == "FY2025-26"
     assert [ln for ln in res["lines"] if ln["tax"] == "RD_USED_VEHICLE"][0]["instrument"] == "1898(I)/2025"
 
