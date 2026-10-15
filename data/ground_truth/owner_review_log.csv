@@ -1,0 +1,21 @@
+sample_no,case_id,reviewer,verdict,note
+1,R073,owner,ok,
+2,R074,owner,bad,Code correct; date is 1 Sep 2026 (fixed in cases_real.csv)
+3,R043,owner,ok,
+4,R042,owner,ok,
+5,R016,owner,ok,
+6,R013,owner,ok,
+7,R059,owner,ok,
+8,R011,owner,ok,
+9,R076,owner,bad,"Court decided heading 87.03 only; 8-digit removed, expected_code now 8703"
+10,R069,owner,ok,
+11,S004,claude_recheck_not_expert,ok,"p267 of tariff 2026-27: 1,000-1,500cc group, 1496cc, 4032 is only 1000-1300cc, so Other = 8703.4039"
+12,S017,claude_recheck_not_expert,ok,"p214: split type group, Other (not CKD/SKD) = 8415.1029"
+13,S025,claude_recheck_not_expert,ok,"p110: buses or lorries, Other (not light trucks), Radial = 4011.2091"
+14,S027,claude_recheck_not_expert,ok,tariff 2025-26 text: 6205.3000 Of man-made fibres; Section XI Note 2 predominance (polyester 65%)
+15,S029,claude_recheck_not_expert,ok,tariff text: 5503.2010 polyesters not exceeding 2.22 decitex; 1.4 denier is about 1.56 decitex
+16,S044,claude_recheck_not_expert,unsure,3926.9099 vs 3924.9000 both arguable; both kept as acceptable (alt_acceptable_codes)
+17,S046,claude_recheck_not_expert,ok,"p327: 9902 diplomats/embassies/consulates, MoFA certified. 9903 (privileged personnel) not read in full; moderate confidence"
+18,S047,claude_recheck_not_expert,ok,"p331: 9909 parcel not exceeding Rs 30,000 by post or courier as unsolicited gift"
+19,S052,claude_recheck_not_expert,ok,Mixed hamper: asking for breakdown/not sure is the sensible expected behaviour
+20,S054,claude_recheck_not_expert,ok,Composition decides (whey 04.04 vs preparation 21.06): asking is sensible

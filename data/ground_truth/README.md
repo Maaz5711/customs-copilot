@@ -44,7 +44,7 @@ All pages were read on 2026-10-14. Nothing was downloaded or saved as a file: PD
 | High Court of Sindh case-law site (caselaw.shc.gov.pk) | 3 | 3 | Two High Court orders (potato fryer 13.05.2026, BOPP film 09.04.2026) and one Tribunal order quoted in a High Court order sheet dated 17.11.2025. |
 | Customs Appellate Tribunal | 0 directly | 0 | The searches I ran did not turn up tribunal orders on a public site, only tribunal findings quoted inside High Court files. |
 
-Mix of the 79 rows by fiscal year: FY2025-26 = 65, FY2026-27 = 14 (most notices are from Jan to Jun 2026). By code length: 71 at 8 digits, 4 at 6 digits, 4 at 4 digits. They cover 33 chapters but lean to machinery and electronics (chapters 84 and 85 are 27 of the 79) and chemicals. There are few everyday food and textile items, which is why the synthetic set covers them.
+Mix of the 79 rows by fiscal year: FY2025-26 = 65, FY2026-27 = 14 (most notices are from Jan to Jun 2026). By code length: 70 at 8 digits, 4 at 6 digits, 5 at 4 digits (R076 reduced to its 4-digit heading after owner review). They cover 33 chapters but lean to machinery and electronics (chapters 84 and 85 are 27 of the 79) and chemicals. There are few everyday food and textile items, which is why the synthetic set covers them.
 
 ## Problems found while collecting
 
@@ -68,8 +68,11 @@ Weak spots to check first: S044 (hangers, 3926.9099 or 3924.9000), S037 (barber 
 
 ## How to report results
 
-- Report n with every number: real n=79 (71 at 8 digits, 4 at 6 digits, 4 at 4 digits) and synthetic n=48 answer cases, 9 clarify cases, 3 refuse cases. Give confidence intervals (for example Wilson); with n around 80 they are wide.
+- Report n with every number: real n=79 (70 at 8 digits, 4 at 6 digits, 5 at 4 digits (R076 reduced to its 4-digit heading after owner review)) and synthetic n=48 answer cases, 9 clarify cases, 3 refuse cases. Give confidence intervals (for example Wilson); with n around 80 they are wide.
 - Report real and synthetic results separately. Do not average them. Treat valuation-ruling rows (12) as weaker evidence than classification-committee rows.
 - The real set comes from one office's committee (Karachi Appraisement-East) and public sources only, and leans to machinery, electronics and chemicals. State this limit.
 - Do not call a synthetic row "wrong" until the owner or a qualified person has confirmed it. A mismatch may be my mistake.
 - For refusal quality use the 9 clarify and 3 refuse rows; for the three-way ablation run every row at its own `as_of_date`, and the real rows also at an FY2026-27 date (`code_also_in_other_fy` is true).
+
+## Owner review of the 20-case sample (2026-10-15)
+Results in `owner_review_log.csv`. Owner checked the 10 real cases (8 ok, 2 corrected: R074 date is 1 Sep 2026; R076 reduced to the 4-digit heading 87.03 because the 8-digit code was Customs' assessment, not a court holding). The 10 synthetic cases were re-checked by Claude against the tariff pages (not by a customs expert): 9 consistent with the tariff text, 1 arguable (S044: 3926.9099 or 3924.9000, both accepted). This is a re-check by the same model family that wrote the cases, so synthetic cases stay `verified=false`.
