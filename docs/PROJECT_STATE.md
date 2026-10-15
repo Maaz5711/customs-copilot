@@ -22,7 +22,7 @@ Customs Copilot (Pakistan): an agent that picks the 8-digit PCT code and compute
 | Tools | src/tools, docs/tools.md | done: lookup_code, get_applicable_sros, compute_duty (MCP) |
 | LangGraph agent | src/agent, docs/agent.md, docs/agent_notes.md | works live with Gemini free tier; retrieval for big headings weak |
 | Ground truth | data/ground_truth (README) | 79 real (+5 out of scope), 60 synthetic (unverified); owner reviewed 20 |
-| Evaluation harness (C2) | src/eval, docs/eval.md | harness built and smoke-tested live (4 cases x plain/RAG, 1 case full graph); NO real run yet, no accuracy numbers exist |
+| Evaluation (C2) | src/eval, docs/eval.md, docs/eval_versions.md | DONE for v0-v4 on DeepSeek flash (key in .env). Full agent real cases: exact 8-digit line top-1 38/70 (54%), right line in top 3 51/70 (73%); plain LLM 18/70, LLM+search 24/70. TariffAI baseline run (6-digit only). All numbers in docs/eval_versions.md with intervals |
 | UI/API, README results | - | NOT started |
 
 ## Conventions that matter
@@ -55,10 +55,12 @@ Customs Copilot (Pakistan): an agent that picks the 8-digit PCT code and compute
 4. Baseline: clone Danial's TariffAI (MIT, reference only) so it can be run on the same cases at 6 digits.
 
 ## NEXT STEPS (in order)
-1. Run the ablation in daily batches (Gemini free quota, about 20 requests per model per day; answers are cached): `python -m src.eval.run --max-llm-calls 100` (resumable; `--sample 5` for a first small pass; `--kinds duty --systems full_graph` for the 2 hand-computed bills). Then `python -m src.eval.run --report` writes docs/eval_report.md. Commit data/processed/eval/results_*.jsonl and the report once real numbers exist. Search is slow on CPU (minutes per full-graph case on first load).
-2. Add more hand-computed duty cases to data/ground_truth/duty_cases.csv (each with its working and source pages); only 2 exist.
-3. Baseline: Danial's TariffAI at 6 digits on the same cases (needs the repo cloned; ask the owner).
-4. C3: FastAPI + simple UI (answer, duty bill, sources), README with the ablation numbers, short write-up, demo video. Only after the agent works (CLAUDE.md: no UI before the agent works).
+1. Real answer key: owner is asking a friend (textile/electronics importer from China) for 30-50 products with the final accepted 8-digit code (kit in docs/case_collection/). When it arrives: add as a third case file (kind 'importer'), report separately, check for disputes vs clean cases. Real test set is mostly contested goods (66 of 79 are disputes), so scores are pessimistic for everyday goods.
+2. FBR email (docs/case_collection/email_draft.md) is for the owner to send: asks permission to use published documents in a free public tool, data files, a validation reviewer, and 5 legal questions. Legal note: FBR website terms allow copying unmodified single pages for sharing; our derived data should not be republished until permission arrives.
+3. Accuracy levers still open: tune Classify (thinking is on in v4: +2 cases, within noise, cost about 0.004 USD per query); more precedents as FBR publishes; WCO Explanatory Notes cannot be copied (hard rule 6), cite by reference only; ask-and-answer loop with real users (the simulated importer did not help).
+4. More hand-computed duty cases in data/ground_truth/duty_cases.csv (only 2 exist).
+5. C3: FastAPI + simple UI (answer, bill, sources, alternatives, date stamp, 'not FBR' notice, privacy notice for the LLM provider), README with docs/eval_versions.md numbers. Competitors (clearagent.io, taxtoday.pk) are keyword lookups with customs duty only; our edge is described-in-words classification plus the full cited bill by date.
+6. Eval LLM: DeepSeek flash (DEEPSEEK_API_KEY). Spend so far about 4.4M input and 0.9M output tokens: 1.2 to 2.4 USD depending on peak/off-peak. Check the DeepSeek balance before large runs. Gemini adapter still works (free tier, 20 req/model/day).
 
 ## Housekeeping notes
 - Local-only (gitignored): data/raw (originals), legal_store.sqlite, search_index/, .env. Rebuild commands are at the top.
