@@ -94,7 +94,8 @@ def _chapter_of(code: str) -> str:
 
 def gather(retriever: Retriever, notes_loader: NotesLoader, *, query: str, extra_queries: list[str] | None = None,
            user_codes: list[str] | None = None, as_of_date: str, floors: dict | None = None, k_tariff: int = 10,
-           max_lines: int = 36, max_children: int = 30, max_notes_per_chapter: int = 8) -> dict:
+           max_lines: int = 36, max_children: int = 30, max_notes_per_chapter: int = 8,
+           hint_headings: list[str] | None = None, max_hint_lines: int = 60) -> dict:
     """Collect candidate tariff lines, legal notes, SRO excerpts and rulings for one product on one date. Pure retrieval, no LLM."""
     fl = {**DEFAULT_FLOORS, **(floors or {})}
     dropped = {"tariff": 0, "notes": 0, "sro": 0, "rulings": 0}
@@ -153,6 +154,23 @@ def gather(retriever: Retriever, notes_loader: NotesLoader, *, query: str, extra
         if 0 < len(kids) <= max_children:
             expanded.extend(kids)
 
+    # ---- headings the LLM proposed from its own knowledge: they only WIDEN the pool. The lines still come from the tariff,
+    # and the classifier can still choose only among them. The first hint may list a big heading (up to max_hint_lines lines);
+    # the others list small headings in full, or the lines of a big heading that share most words with the query.
+    hinted: list[dict] = []
+    words = {w for w in re.findall(r"[a-z]{3,}", (query or "").lower())}
+    for rank, hd in enumerate((hint_headings or [])[:3]):
+        hd = re.sub(r"\D", "", str(hd))[:4]
+        if len(hd) != 4:
+            continue
+        kids = [h for h in retriever(hd, "tariff", as_of_date, 120) if h.get("kind") == "line" and h.get("code", "").startswith(hd)]
+        if not kids:
+            continue
+        if len(kids) > (max_hint_lines if rank == 0 else max_children):
+            keep = max_hint_lines if rank == 0 else 12
+            kids = sorted(kids, key=lambda h: -len(words & set(re.findall(r"[a-z]{3,}", (h.get("text") or "").lower()))))[:keep]
+        hinted.extend(kids)
+
     # ---- rulings and SRO excerpts (semantic only; rates always come from the tools)
     sro, rulings = [], []
     if queries:
@@ -176,7 +194,7 @@ def gather(retriever: Retriever, notes_loader: NotesLoader, *, query: str, extra
 
     # ---- codes quoted in a relevant ruling join the pool (a ruling is classification authority). Exact lookup validates them.
     ruling_lines: list[dict] = []
-    known = {h["code"] for h, _ in hits_lines} | {h["code"] for h in user_lines} | {h["code"] for h in expanded}
+    known = {h["code"] for h, _ in hits_lines} | {h["code"] for h in user_lines} | {h["code"] for h in expanded} | {h["code"] for h in hinted}
     for r in rulings:
         for c in find_pct_codes(r["text"]):
             if len(c["code"]) != 8 or not c["trusted"] or c["code"] in known or len(ruling_lines) >= 6:
@@ -207,7 +225,11 @@ def gather(retriever: Retriever, notes_loader: NotesLoader, *, query: str, extra
         if h["id"] not in seen:
             seen.add(h["id"])
             lines.append(_line_view(h, h.get("rerank_score")))
-    lines = lines[:max_lines]
+    for h in hinted:
+        if h["id"] not in seen:
+            seen.add(h["id"])
+            lines.append(_line_view(h, h.get("rerank_score")))
+    lines = lines[: max_lines + (max_hint_lines if hinted else 0)]
     for i, ln in enumerate(lines, 1):
         ln["label"] = f"T{i}"
 
@@ -264,7 +286,7 @@ def gather(retriever: Retriever, notes_loader: NotesLoader, *, query: str, extra
     for i, n in enumerate(notes, 1):
         n["label"] = f"N{i}"
 
-    return {"queries": queries, "lines": lines, "notes": notes, "sro": sro, "rulings": rulings, "chapters": chapters, "dropped": dropped,
+    return {"queries": queries, "hint_headings": [re.sub(r"\D", "", str(x))[:4] for x in (hint_headings or [])[:3]], "lines": lines, "notes": notes, "sro": sro, "rulings": rulings, "chapters": chapters, "dropped": dropped,
             "as_of_date": as_of_date}
 
 

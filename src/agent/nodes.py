@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 import operator
+import os
 import re
 from dataclasses import dataclass, field
 from datetime import date
@@ -58,6 +59,8 @@ class AgentState(TypedDict, total=False):
     evidence: dict
     offered_codes: list
     retry_pending: bool
+    hint_headings: list
+    hint_query: str
     extra_queries: list
     candidates: list
     rejected_codes: list
@@ -88,6 +91,8 @@ class Config:
     max_clarify_rounds: int = 4
     max_reask: int = 2                      # times one unreadable answer is asked again
     k_tariff: int = 10
+    # one small LLM call proposes 4-digit headings; they only widen the candidate pool. AGENT_USE_HINTS=0 switches it off (the unit tests do).
+    use_hints: bool = field(default_factory=lambda: os.environ.get("AGENT_USE_HINTS", "1") != "0")
     floors: dict = field(default_factory=lambda: dict(DEFAULT_FLOORS))
 
 
@@ -216,9 +221,9 @@ def facts_from_understand(u: dict, message: str, deps: Deps) -> tuple[dict, dict
     return facts, inputs, dropped
 
 
-def _refuse(reason: str, deps: Deps, trace: str) -> dict:
+def _refuse(reason: str, deps: Deps, trace: str, kind: str = "date") -> dict:
     lo, hi = deps.tools.supported_range()
-    return {"mode": "refused", "refusal": {"reason": reason, "supported": [lo, hi]}, "route": "respond", "trace": [trace]}
+    return {"mode": "refused", "refusal": {"reason": reason, "supported": [lo, hi], "kind": kind}, "route": "respond", "trace": [trace]}
 
 
 # --------------------------------------------------------------------------------------------- Understand
@@ -272,6 +277,14 @@ def make_understand(deps: Deps):
             u, facts, inputs, dropped, log, model = extract(q)
         except LLMError as e:
             return _err_update(e)
+        # refusals that need no search: misdeclaration (the user states the intent in their own words) and questions that are not about imports
+        if u.get("misdeclaration_intent") and u.get("misdeclaration_quote") and quote_in(u["misdeclaration_quote"], q):
+            return _refuse("you asked how to describe or declare the goods as something other than what they are in order to pay less duty or tax. "
+                           "That is misdeclaration, and I will not help with it. I can classify the goods as they really are and calculate the lawful duty.",
+                           deps, "understand: refused (misdeclaration)", "misdeclaration")
+        if u.get("off_topic") and not u.get("goods_description") and not find_pct_codes(q):
+            return _refuse("this is not a question about the customs classification or duty of goods imported into Pakistan.", deps,
+                           "understand: refused (off topic)", "off_topic")
         # date from the message (only when the user wrote one; never today's date unless the user wrote "today")
         if not date_iso and u["date_text"] and quote_in(u["date_text"], q):
             if says_today(u["date_text"]):
@@ -461,14 +474,26 @@ def make_search(deps: Deps):
         code_only = (not has_desc) and len(full) == 1
         retry = bool(state.get("retry_pending"))
         k = cfg.k_tariff + (5 if state.get("retries", 0) >= 2 else 0)
+        query_text = "" if code_only else build_query(facts, clar)
+        hints, hint_log = list(state.get("hint_headings") or []), []
+        if cfg.use_hints and query_text and state.get("hint_query") != query_text:
+            try:
+                res, hlog = _call(deps, "hint_headings", prompts.HINT_SYSTEM, prompts.hint_prompt(query_text))
+                hint_log = [hlog]
+                raw_h = (res.data.get("headings") if isinstance(res.data, dict) else None) or []
+                hints = [h for h in (re.sub(r"\D", "", str(x))[:4] for x in raw_h) if len(h) == 4][:4]
+            except LLMBadResponse:
+                hints = []                      # a bad hint answer only means plain search; it never stops the question
+            except LLMError as e:
+                return _err_update(e)
         try:
-            ev = gather(deps.retriever, deps.notes_loader, query="" if code_only else build_query(facts, clar), extra_queries=list(state.get("extra_queries") or []) if retry else [],
-                        user_codes=good, as_of_date=date_iso, floors=cfg.floors, k_tariff=k)
+            ev = gather(deps.retriever, deps.notes_loader, query=query_text, extra_queries=list(state.get("extra_queries") or []) if retry else [],
+                        user_codes=good, as_of_date=date_iso, floors=cfg.floors, k_tariff=k, hint_headings=hints)
         except FileNotFoundError as e:
             return _err_update(RuntimeError(f"The search index is missing ({e}). Build it with: python -m src.search.build"))
         except Exception as e:      # an index or model problem must end in a clear message, not a stack trace
             return _err_update(RuntimeError(f"Search failed: {type(e).__name__}: {e}"))
-        return {"evidence": ev, "offered_codes": offered_codes(ev), "user_codes": good, "user_code_only": code_only, "notes_to_user": notes, "retry_pending": False, "route": "classify",
+        return {"evidence": ev, "offered_codes": offered_codes(ev), "user_codes": good, "user_code_only": code_only, "notes_to_user": notes, "retry_pending": False, "route": "classify", "hint_headings": hints, "hint_query": query_text, "llm_log": hint_log,
                 "trace": [f"search: {len(ev['lines'])} lines, {len(ev['notes'])} notes, {len(ev['sro'])} SRO excerpts, {len(ev['rulings'])} rulings"
                           + (f" (retry {state.get('retries', 0)})" if retry else "") + (f", dropped below floor {ev['dropped']}" if any(ev["dropped"].values()) else "")]}
 
