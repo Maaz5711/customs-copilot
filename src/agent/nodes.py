@@ -239,6 +239,16 @@ def make_understand(deps: Deps):
             qs.append(_q("as_of_date", "request", text, why="Rates, SROs and tax rules change on 1 July and sometimes in between."))
         return qs
 
+    def extract(message: str):
+        """One Understand LLM call on `message`; facts and inputs are kept only with a quote found in the message. Raises LLMError."""
+        try:
+            res, log = _call(deps, "understand", prompts.UNDERSTAND_SYSTEM, prompts.understand_prompt(message))
+            u = validate_understand(res.data)
+        except SchemaError as e:
+            raise LLMBadResponse(f"The language model's answer to the Understand step could not be read ({e}).")
+        facts, inputs, dropped = facts_from_understand(u, message, deps)
+        return u, facts, inputs, dropped, log, res.model
+
     def first_pass(state: AgentState) -> dict:
         q = (state.get("question") or "").strip()
         lo, hi = deps.tools.supported_range()
@@ -259,13 +269,9 @@ def make_understand(deps: Deps):
             return {"facts": {}, "inputs": {}, "as_of_date": date_iso, "date_source": source, "user_codes": [], "pending_questions": needs_questions({}, [], date_iso, problem, False),
                     "clarify_kind": "request", "route": "clarify", "trace": ["understand: empty question"]}
         try:
-            res, log = _call(deps, "understand", prompts.UNDERSTAND_SYSTEM, prompts.understand_prompt(q))
-            u = validate_understand(res.data)
+            u, facts, inputs, dropped, log, model = extract(q)
         except LLMError as e:
             return _err_update(e)
-        except SchemaError as e:
-            return _err_update(LLMBadResponse(f"The language model's answer to the Understand step could not be read ({e})."))
-        facts, inputs, dropped = facts_from_understand(u, q, deps)
         # date from the message (only when the user wrote one; never today's date unless the user wrote "today")
         if not date_iso and u["date_text"] and quote_in(u["date_text"], q):
             if says_today(u["date_text"]):
@@ -289,7 +295,7 @@ def make_understand(deps: Deps):
         qs = needs_questions(facts, codes, date_iso, problem, u["multiple_products"])
         out = {"facts": facts, "inputs": inputs, "as_of_date": date_iso, "date_source": source, "user_codes": codes, "clarifications": [], "clarify_rounds": 0,
                "retries": 0, "attempts": [], "reask": {}, "unknown_fields": [], "notes_to_user": [], "llm_log": [log],
-               "trace": [f"understand: facts extracted by {res.model}" + (f" (dropped unquoted facts: {', '.join(dropped)})" if dropped else "")]}
+               "trace": [f"understand: facts extracted by {model}" + (f" (dropped unquoted facts: {', '.join(dropped)})" if dropped else "")]}
         if qs:
             out.update({"pending_questions": qs, "clarify_kind": "request", "route": "clarify"})
         else:
@@ -336,11 +342,31 @@ def make_understand(deps: Deps):
                 else:
                     err = c.error
             elif q["id"] == "goods_description":
-                if is_unknown(str(raw)):
+                text = re.sub(r"\s+", " ", str(raw)).strip()
+                if is_unknown(text):
                     err = "you said you do not know"
                 else:
-                    facts["goods_description"] = re.sub(r"\s+", " ", str(raw)).strip()[:300]
-                    for c in find_pct_codes(str(raw)):
+                    # loop back through Understand: facts in the answer (value, quantity, importer status, a date) are read like in a first message
+                    try:
+                        u, f2, i2, dropped, lg, _model = extract(text)
+                        logs = logs + [lg]
+                    except LLMError as e:
+                        return _err_update(e)
+                    facts.update({k: v for k, v in f2.items() if v})
+                    if not f2.get("goods_description"):
+                        facts["goods_description"] = text[:300]
+                    for k, v in i2.items():
+                        if isinstance(v, dict):
+                            inputs.setdefault(k, {})
+                            for kk, vv in v.items():
+                                inputs[k].setdefault(kk, vv)
+                        else:
+                            inputs.setdefault(k, v)
+                    if not date_iso and u["date_text"] and quote_in(u["date_text"], text):
+                        d = deps.today() if says_today(u["date_text"]) else parse_date_text(u["date_text"])
+                        if d:
+                            date_iso, source = d.isoformat(), f"from your answer ('{u['date_text']}')"
+                    for c in find_pct_codes(text):
                         if c["code"] not in codes and (c["trusted"] or deps.tools.code_in_tariff(c["code"])):
                             codes.append(c["code"])
             else:       # duty input from compute_duty.missing_inputs (or the value question)
