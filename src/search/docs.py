@@ -201,4 +201,33 @@ def rulings_docs() -> list[dict]:
     return docs
 
 
-BUILDERS = {"tariff": tariff_docs, "notes": notes_docs, "sro": sro_docs, "rulings": rulings_docs}
+def precedent_docs() -> list[dict]:
+    """Classification Committee decisions read from the FBR public notices (src.ingest.precedents). AI reading of scans: status needs_review.
+    One short document per decision: goods, the code the Committee decided, a summary of the reason. The decided code is written in the
+    usual 1234.5678 form so the agent can pull that tariff line into its candidate list; the classifier must still justify it."""
+    p = PROC / "precedents.json"
+    if not p.exists():
+        return []
+    out = []
+    for r in json.loads(p.read_text(encoding="utf8")):
+        code = r["decided_code"]
+        shown = f"{code[:4]}.{code[4:]}" if len(code) in (6, 8) else code
+        ref = r.get("notice_ref") or "classification public notice"
+        text = (f"Classification Committee decision ({ref}, {r['source_file'][-24:]}): goods: {r['goods']}. "
+                f"DECIDED PCT code {shown}. Reason (AI summary of the notice): {r['reason']}")
+        if r.get("disputed_codes"):
+            text += " Codes argued but not decided: " + ", ".join(f"{c[:4]}.{c[4:]}" if len(c) == 8 else c for c in r["disputed_codes"]) + "."
+        out.append({
+            "id": f"precedent:{r['source_file'][:16]}:{r['n']}", "index": "rulings", "kind": "precedent", "ruling": f"{ref} (Classification Committee decision)",
+            "code": "", "text": text, "source_file": r["source_file"], "page": r["page"], "valid_from": r["valid_from"], "valid_to": r["valid_to"],
+            "date_basis": r["date_basis"], "repeat_files": r.get("repeat_files", []),
+            "note": "AI reading of a scan (DeepSeek), decided code checked against the tariff on the date; not owner verified",
+        })
+    return out
+
+
+def rulings_all() -> list[dict]:
+    return rulings_docs() + precedent_docs()
+
+
+BUILDERS = {"tariff": tariff_docs, "notes": notes_docs, "sro": sro_docs, "rulings": rulings_all}

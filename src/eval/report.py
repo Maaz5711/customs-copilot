@@ -12,7 +12,7 @@ from .citations import score_citations
 from .metrics import code_metrics, duty_match, refusal_metrics, wilson
 from .systems import SYSTEMS
 
-ALL = SYSTEMS + ("tariffai",)      # tariffai = Danial's baseline, run from its own folder (results_tariffai.jsonl), 6-digit HS only
+ALL = SYSTEMS + ("tariffai",)       # SYSTEMS includes full_graph_assisted      # tariffai = Danial's baseline, run from its own folder (results_tariffai.jsonl), 6-digit HS only
 
 OUT = Path("data/processed/eval")
 REPORT = Path("docs/eval_report.md")

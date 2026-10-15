@@ -512,8 +512,10 @@ class DeepSeekLLM:
 
     def __init__(self, api_key: str | None = None, model: str | None = None, *, thinking: str | None = None, cache: bool = True,
                  cache_dir: Path | str | None = None, post: Callable | None = None, sleep: Callable[[float], None] = time.sleep,
-                 max_calls: int | None = None, max_failures: int = 30, timeout: float = 180.0, retries: int = 4):
+                 max_calls: int | None = None, max_failures: int = 30, timeout: float = 180.0, retries: int = 4,
+                 overrides: dict | None = None):
         self._api_key = api_key
+        self.overrides = dict(overrides or {})     # task -> {'model': ..., 'thinking': 'enabled'|'disabled'}, for example the Classify step only
         self.model = model or os.environ.get("DEEPSEEK_MODEL", "").strip() or "deepseek-flash"
         self.thinking = (thinking or os.environ.get("DEEPSEEK_THINKING", "").strip() or "disabled").lower()
         if self.thinking not in ("enabled", "disabled"):
@@ -539,14 +541,16 @@ class DeepSeekLLM:
         return k
 
     def complete_json(self, *, task: str, system: str, prompt: str, temperature: float = 0.0) -> LLMResult:
-        ckey = self.cache.key(task, system + f"\n#{self.model}/{self.thinking}", prompt, temperature)
+        ov = self.overrides.get(task, {})
+        model, thinking = ov.get("model", self.model), ov.get("thinking", self.thinking)
+        ckey = self.cache.key(task, system + f"\n#{model}/{thinking}", prompt, temperature)
         hit = self.cache.get(ckey)
         if hit is not None:
             self.stats["cache_hits"] += 1
             return LLMResult(data=hit["response"], model=hit.get("model", "?"), cached=True, text=hit.get("text", ""), usage=hit.get("usage", {}))
-        body = {"model": self.model, "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
-                "response_format": {"type": "json_object"}, "thinking": {"type": self.thinking}, "stream": False}
-        if self.thinking == "disabled":
+        body = {"model": model, "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+                "response_format": {"type": "json_object"}, "thinking": {"type": thinking}, "stream": False}
+        if thinking == "disabled":
             body["temperature"] = temperature
         headers = {"Authorization": f"Bearer {self._key()}", "content-type": "application/json"}
         post = self._post
@@ -581,11 +585,11 @@ class DeepSeekLLM:
                     continue
                 self.stats["tokens_in"] += int(usage.get("prompt_tokens") or 0)
                 self.stats["tokens_out"] += int(usage.get("completion_tokens") or 0)
-                self.cache.put(ckey, {"task": task, "model": self.model, "response": parsed, "text": text,
+                self.cache.put(ckey, {"task": task, "model": model, "response": parsed, "text": text,
                                       "usage": {k: usage.get(k) for k in ("prompt_tokens", "completion_tokens", "total_tokens")},
                                       "created_at": dt.datetime.now(dt.timezone.utc).isoformat(), "system": system, "prompt": prompt,
-                                      "temperature": temperature, "thinking": self.thinking})
-                return LLMResult(data=parsed, model=self.model, cached=False, text=text, usage=usage)
+                                      "temperature": temperature, "thinking": thinking})
+                return LLMResult(data=parsed, model=model, cached=False, text=text, usage=usage)
             self.stats["failed_requests"] += 1
             if st in (401, 403):
                 raise LLMUnavailable(f"DeepSeek rejected the API key ({st}). Check DEEPSEEK_API_KEY in .env.")
