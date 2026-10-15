@@ -29,7 +29,7 @@ def run(fy: str):
     (OUT / f"tariff_{fy}.json").write_text(
         json.dumps({"headings": headings, "rows": rows, "special": special}, indent=1), encoding="utf-8")
     with open(OUT / f"tariff_{fy}.csv", "w", newline="", encoding="utf-8") as f:
-        cols = ["code", "heading", "description", "cd_kind", "cd_plain", "cd_raw",
+        cols = ["code", "heading", "description", "own_description", "full_description", "cd_kind", "cd_plain", "cd_raw",
                 "valid_from", "valid_to", "source_file", "page"]
         w = csv.DictWriter(f, fieldnames=cols, extrasaction="ignore")
         w.writeheader()

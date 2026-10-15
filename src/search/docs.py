@@ -52,21 +52,16 @@ def tariff_docs() -> list[dict]:
                 "source_file": h["source_file"], "page": h["page"],
                 "valid_from": h["valid_from"], "valid_to": h["valid_to"],
             })
-            stack: dict[int, str] = {}
-            for lvl, txt in hp[1:]:
-                stack = {k: v for k, v in stack.items() if k < lvl}
-                stack[lvl] = txt
             for r in by_heading.get(h["heading"], []):
-                ps = _pieces(r["description"])
-                if not ps:
-                    continue
-                lvl, own = ps[0]
-                stack = {k: v for k, v in stack.items() if k < lvl}
-                chain = [title] + [stack[k] for k in sorted(stack)] + [own]
-                stack[lvl] = own
-                for l2, t2 in ps[1:]:  # sub-headings glued at the end apply to following rows
-                    stack = {k: v for k, v in stack.items() if k < l2}
-                    stack[l2] = t2
+                if "own_description" in r:  # fixed parser: explicit parent headers and own text
+                    own = r["own_description"]
+                    chain = [title] + list(r["parent_chain"]) + [own]
+                else:  # older files: headers were glued to the end of the previous row
+                    ps = _pieces(r["description"])
+                    if not ps:
+                        continue
+                    own = ps[0][1]
+                    chain = [title, own]
                 docs.append({
                     "id": f"tariff:{fy}:{r['code']}:p{r['page']}", "index": "tariff", "fy": fy, "kind": "line",
                     "code": norm_code(r["code"]), "code_display": r["code"], "heading": r["heading"],
