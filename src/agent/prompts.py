@@ -37,7 +37,7 @@ UNDERSTAND_FORMAT = """Return a JSON object with exactly these keys:
   "manufacturer_quote": "exact words, or null",
   "date_text": "exact words giving a calendar date on which the rules should apply, for example 15 July 2026 or today, or null. A fiscal year or a month alone is NOT a date",
   "codes_text": ["tariff or HS codes exactly as written in the message"],
-  "multiple_products": true or false (the message asks about more than one different product),
+  "multiple_products": true or false (true ONLY when the message lists clearly unrelated goods that would be classified separately, for example T-shirts and tyres. Variants or types of one product (DVR and NVR), the components of one system, set or kit, and parts of one machine are ONE product: false),
   "off_topic": true or false (the message is not about importing goods into Pakistan: for example personal income tax on a salary, or a question with no goods in it)
   "misdeclaration_intent": true or false (the user says they want to declare or describe the goods as something other than what they really are, or to dodge duty or tax unlawfully. Asking which lawful code or concession applies is NOT misdeclaration),
   "misdeclaration_quote": "exact words of the message that show the intent, or null"
