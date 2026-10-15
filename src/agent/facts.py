@@ -48,6 +48,8 @@ SPECS: dict[str, dict] = {
     "goods.plant_machinery_for_manufacturing": {"type": "bool"},
     "goods.c_and_f_value_usd_per_unit": {"type": "number", "gt": 0, "what": "C&F value in US dollars per unit"},
     "goods.retail_price_total_pkr": {"type": "money_pkr"},
+    "goods.fed_quantity": {"type": "number", "gt": 0, "what": "quantity in the unit of the federal excise duty rate"},
+    "goods.fan_not_meps_compliant": {"type": "bool"},
     "goods.running_time_minutes": {"type": "number", "gt": 0, "what": "running time in minutes"},
     "goods.age_years": {"type": "number", "min": 0, "max": 100, "what": "age in years"},
 }

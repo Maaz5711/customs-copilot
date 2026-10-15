@@ -61,7 +61,9 @@ CD    = tariff CD% x V            or  Rs x quantity (specific)
 RD    = RD SRO rate x V           (SRO 1152 until 30 Jun 2026, SRO 1064 from 1 Jul 2026); used vehicles: separate line RD_USED_VEHICLE
                                    (SRO 1898 1 Oct 2025 to 29 Jun 2026; SRO 1065 from 30 Jun 2026), "in addition" to the main RD
 ACD   = ACD rate x V              (SRO 1151 / SRO 1063; slab test on the code's tariff CD; para 3 not-levied clauses -> 0)
-V_ST  = V + CD + RD + ACD         (FED not included: OPEN-1). Third Schedule goods: retail price
+FED   = Table I rate x (V + CD + RD + ACD), or x retail price, or Rs x quantity (FED Act s.12(3)-(4), First Schedule)
+SED   = Table IA rate x (V + CD + RD + ACD), in addition to FED (FED Act s.3(3B); base open, OQ-A6-2)
+V_ST  = V + CD + RD + ACD + FED + SED  (Sales Tax Act s.2(46)(d)). Third Schedule goods: retail price
 ST    = rate x V_ST               rate precedence: exemption (Sixth Schedule) > Eighth Schedule > SRO 297 Table-I > standard 18% (s.3(1))
 VAT   = 3% x V_ST                 value addition tax at import (s.7A(2), Twelfth Schedule), unless an exclusion applies
 V_IT  = V + CD + RD + ACD + ST + VAT   (Third Schedule goods: retail price + ST)
@@ -90,7 +92,13 @@ CKD vehicle rows of the ACD SROs (OQ-A3-1); Sixth Schedule rows with unconfirmed
 (not applied); s.3(1A) further tax (OPEN-4); every assumption id in `assumptions` (`ROUNDING`, `FED`, `OPEN2`, `OPEN3`, `OPEN10`, `OPEN4`, `REGIME`, `VATFACTS`, `TWELFTH_P3`, `PROVISOS`).
 
 ## Known limits (the tools say so; they do not guess)
-* Federal excise duty is not in any base (OPEN-1). A flag is raised for headings 8702/8703/8704/8711.
+* Federal excise duty (A6): lines `FED` and `SED` are added after ACD (`src/tools/fed.py`, rows of the store table `fed_rules`) and are part of the sales-tax, VAT and income-tax bases. Totals have a new key `federal_excise_duty`. The old flag `FED_not_included` is gone.
+  * Inputs: `goods.engine_cc` and `goods.vehicle_form` (cars, pickups, Table IA); `goods.retail_price_total_pkr` (retail-price rates: cigarettes, cigars, aerated waters, e-liquid); `goods.fed_quantity` or `quantity`+`quantity_unit` in the unit of the FED rate (kg, liter, MMBTu, 100 m3, 100 MT, 1000 cigarettes, fan, DOC); `goods.fan_not_meps_compliant` (S.No 60).
+  * Compound rates (`higher_of`) take the larger of the percentage part and the specific part and say which in the line note.
+  * Refusals (status `cannot_compute`, no total): electric vehicles 8703.80xx (OQ-A6-1), engine capacity 3001 cc (OQ-A6-4), CKD vehicles, several Table I serials on one code. Table IA below 2000 cc gives no SED and a note.
+  * Rows mapped by description from 'Respective heading(s)' carry `fed_row_mapped_by_description_not_owner_verified` and assumption `FED_MAPPED`; serials left unmapped are never matched but raise flag `fed_unmapped_serial_possible`. Third Schedule exemptions are listed in `possible_rules_not_applied`, never applied.
+  * Assumptions: `FED` (scope), `FED_DATE` (OQ-A6-6), `FED_MAPPED`, `FED_RETAIL`, `SED_BASE` (the line note shows the amount if the base also held the Table I FED).
+  * `get_applicable_sros` has a `fed` block: `applicable`, `possible_exemptions`, `excluded` (local-only rows, other fiscal year, shadowed rows, each with `why_not_applied`) and `notes`.
 * Customs duty exemptions and concessions (Fifth Schedule, FTA/PTA, other SROs) are not in the store; only the tariff CD is applied.
 * Rows that name goods only in words (no PCT code) cannot be matched by code: Third/Sixth/Eighth/Fifth Schedule descriptive entries, Twelfth Schedule descriptive entries (class falls to Part III by residual), Ninth Schedule mobile table.
 * Mobile phones (8517.13xx/8517.14xx): CD and RD tiers are computed; sales tax and income tax return `cannot_compute` (Ninth Schedule Table-II and the First Schedule mobile table are not matchable to tariff lines; the IT table names 8517.1219/8517.1211 which are not tariff lines).

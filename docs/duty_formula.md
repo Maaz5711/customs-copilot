@@ -124,7 +124,7 @@ different groups are cumulative and all come back. Rows still need a caller deci
 * **ACD slab.** SLAB_EQ n needs tariff CD = n; SLAB_GE n needs tariff CD >= n or a specific-rate line. Rows with an `except` list in the same SRO are carved out by the store before the slab test.
 Full list of inputs, statuses and limits: `docs/tools.md`.
 
-## 7. FED at import (A6, DRAFT; compute_duty not yet changed: spec in `docs/a6_fed_findings.md` section 6)
+## 7. FED at import (A6, DRAFT; implemented in `compute_duty` via `src/tools/fed.py`, spec in `docs/a6_fed_findings.md` section 6)
 Files: `FED26` = `20267171373633512FEDAct2005updatedupto30-06-2026.pdf`, `FED25` = `202588138517680FEDAct,2005withindexupdatedupto30-06-2025.pdf`. Rates are in table `fed_rules` (`a6_fed_rules.csv`).
 ```
 FED_T1  = rate x base      base = V + CD + RD + ACD            FED Act s.12(3) p.20 "value ... section 25 of the Customs Act ... including customs duties payable thereon"
@@ -138,3 +138,5 @@ V_IT    = V + CD + RD + ACD + FED_T1 + SED + ST (+VAT)         ITO First Schedul
 * Whether "customs duties" in s.12(3) includes RD and ACD is the same inference as OPEN-2.
 * Tables: First Schedule Table I (rates, `FED26` pp.70-78, `FED25` pp.72-81), Table IA (SED, new from 1 Jul 2026, `FED26` p.80), Third Schedule (conditional exemptions, `FED26` pp.88-100), Second Schedule (sales tax mode, p.87). Interpretation under Table I: description prevails over tariff classification, rate applies to imports (`FED26` pp.78-79).
 * Rounding and date of rate: not stated for imports (OQ-A6-6).
+* **As implemented.** FED = rate x (V + CD + RD + ACD) for ad valorem rows (s.12(3) p.20); x retail price for retail-price rows (s.12(4) p.20-21); Rs x quantity for specific rows; larger of the two parts for compound rows. SED (Table IA) uses the same base and is a separate line (OQ-A6-2 shown as the alternative amount in the line note). V_ST adds FED and SED (Sales Tax Act s.2(46)(d) p.25); V_IT adds FED, SED, ST and VAT (ITO First Schedule Part II col. 3). Each line is rounded half-up to 0.01 and the rounded amount feeds the next base. Third Schedule goods keep the retail-price base for sales tax; their FED line is still computed.
+* **Mapping of 'Respective heading(s)' rows** (`data/processed/a6_fed_mapping.csv`): 16 of 54 rows (S.No 7a acetate tow, 8a e-liquid, 8b cigars, 8c heated tobacco, 8d nicotine pouches, 60 fans, 62 fertilizers, 64 day-old chicks, in both years) are mapped by description match to tariff codes or headings, status needs_review, owner has not verified. Left unmapped: 6, 56, 59, 55A (ambiguous or OQ-A6-1), Third Schedule rows (exemptions by importer or project, not goods) and Table III sugar (local supply). Cigars (2402.1000) now take S.No 8b instead of the cigarette row S.No 8, which matches the whole heading 2402.

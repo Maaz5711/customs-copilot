@@ -4,6 +4,7 @@ from __future__ import annotations
 from ._util import (
     collect, coverage, excluded_view, get_conn, group_rows, norm_code, rows, rule_view, sros_of_kind, to_iso,
 )
+from .fed import fed_block
 from .lookup import lookup_code
 from .rules import acd_kind, income_tax_class, make_acd_prefilter, make_st_prefilter, st_benign_condition
 
@@ -70,6 +71,9 @@ def get_applicable_sros(code, as_of_date, db_path=None) -> dict:
                                                    "note": problem or ("Part III is the residual class: no Part I or II entry matched the code" if cls == 3 else None)}
     out["income_tax"]["notifications"] = dict(zip(("in_force_on_date", "not_in_force_on_date"), sros_of_kind(conn, "IT", d)))
 
+    # federal excise duty (First Schedule Table I / IA applicable to imports; Third Schedule exemptions listed, never applied)
+    out["fed"] = fed_block(conn, c, d)
+
     out["concessions"] = {
         "applicable": [],
         "note": "Customs concessions are not in the dated store. The only concession rows read (A3) are the sugar SROs 1215/1834 and Early Harvest SRO 1386(I)/2025; they name no PCT code and are out of v1 duty scope.",
@@ -78,6 +82,6 @@ def get_applicable_sros(code, as_of_date, db_path=None) -> dict:
     if c.startswith("1701"):
         flags.append("sugar: SRO 1215/1217/1832/527/663 and the income-tax twins name no PCT code; they are not matched by code (OQ-A3-3)")
     if c.startswith(("8702", "8703", "8704", "8711")):
-        flags.append("vehicle: used-vehicle RD (SRO 1898/1065), CKD/CBU and engine size matter; FED not in the store (OPEN-1)")
+        flags.append("vehicle: used-vehicle RD (SRO 1898/1065), CKD/CBU and engine size matter; FED rows are listed under `fed` (electric vehicles are not computed, OQ-A6-1)")
     out["flags"] = flags
     return out

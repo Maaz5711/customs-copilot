@@ -11,6 +11,7 @@ from decimal import Decimal, InvalidOperation
 from ._util import (
     D, collect, coverage, fmt, get_conn, group_rows, money, norm_code, rule_view, rows, sro_info, to_iso,
 )
+from .fed import apply_fed
 from .lookup import lookup_code
 from .rules import (
     USED_VEHICLE_SROS, Facts, acd_kind, age_rate, income_tax_class, make_acd_prefilter, make_st_prefilter, norm_unit, tier_bounds,
@@ -24,17 +25,23 @@ ORDER = [
     "CD  = tariff CD rate x V, or specific Rs x quantity (Customs Act s.18(1), Tariff column CD)",
     "RD  = RD SRO rate in force on the date x V; used-vehicle SROs 1898/1065 are separate 'in addition' lines (Customs Act s.18(3)-(4))",
     "ACD = ACD SRO rate (by the code's tariff CD slab) x V (Customs Act s.18(5)-(6))",
-    "V_ST = V + CD + RD + ACD  [FED omitted: OPEN-1]  (Sales Tax Act s.2(46)(d)); Third Schedule goods: retail price (s.3(2)(a))",
+    "FED = Federal Excise Act First Schedule Table I rate x (V + CD + RD + ACD) [s.12(3)], or x retail price [s.12(4)], or Rs x quantity; higher of two parts for compound rates",
+    "SED = Table IA special excise duty (vehicles over 2000 cc, from 1 Jul 2026), in addition to FED [s.3(3B)]; base open (OQ-A6-2)",
+    "V_ST = V + CD + RD + ACD + FED + SED  (Sales Tax Act s.2(46)(d)); Third Schedule goods: retail price (s.3(2)(a))",
     "ST  = sales tax rate x V_ST (exemption > Eighth Schedule > SRO 297 Table-I > standard 18%; Sales Tax Act s.3)",
     "VAT = 3% value addition tax at import x V_ST (Sales Tax Act s.7A(2), Twelfth Schedule), unless an exclusion applies",
-    "V_IT = V + CD + RD + ACD + ST + VAT; Third Schedule goods: retail price + ST (ITO s.148(9))",
+    "V_IT = V + CD + RD + ACD + FED + SED + ST + VAT; Third Schedule goods: retail price + ST (ITO s.148(9))",
     "IT  = Part II rate for the Twelfth Schedule class x V_IT (ITO s.148, First Schedule Part II)",
-    "Total = CD + RD + ACD + ST + VAT + IT  (further tax for unregistered importers is shown separately, OPEN-4)",
+    "Total = CD + RD + ACD + FED + SED + ST + VAT + IT  (further tax for unregistered importers is shown separately, OPEN-4)",
 ]
 
 ASSUME_TEXT = {
     "ROUNDING": "No source document states a rounding rule (OPEN-5). Each line is rounded half-up to 0.01 PKR (or 1 PKR with rounding='rupee') and the rounded amounts feed the next base.",
-    "FED": "Federal excise duty is not included in any base (OPEN-1: the Federal Excise Act is not in data/raw). For vehicles and other FED goods the real bill is higher.",
+    "FED": "FED is applied only where a First Schedule Table I / IA row is stored for the code. Serials printed 'Respective heading(s)' match only through the description-match mapping (a6_fed_mapping.csv); serials left unmapped (aerated waters from juices S.No 6, filter rod 56, sugary juices 59, electric cars 55A) are never matched. FED notifications issued during the year are not in data/raw (OQ-A6-9).",
+    "FED_DATE": "The FED rate in force on the as_of_date is used; FED Act s.10 speaks of the date of supply for home consumption, the Act does not name the import date (OQ-A6-6).",
+    "FED_MAPPED": "This FED row was mapped to the tariff code by description match (docs/a6_fed_findings.md OQ-A6-3). The owner has not verified the mapping.",
+    "FED_RETAIL": "The retail price is the total price printed on the packs of the consignment, as given by the caller (FED Act s.12(4)); the tool cannot check it.",
+    "SED_BASE": "Special Excise Duty (Table IA) is taken on V + CD + RD + ACD; the Act does not say whether the Table I FED is also in its base (OQ-A6-2), and no Board notification on collection is in data/raw (OQ-A6-5). The line note shows the alternative amount.",
     "OPEN2": "RD and ACD are counted as 'customs-duties' inside the sales tax and income tax bases (inference from Customs Act s.18A, OPEN-2).",
     "OPEN10": "Value addition tax (Sales Tax Act s.7A(2), Twelfth Schedule: 3% ad valorem at import) is taken on the same base as sales tax and counted as sales tax inside the income tax base. The Schedule says only 'ad valorem' (OPEN-10).",
     "OPEN4": "Further tax (s.3(1A), 4%) is written in the Act for supplies to unregistered persons. Whether Customs collects it at import is not in the documents (OPEN-4), so it is shown but not added to the total.",
@@ -48,6 +55,7 @@ ASSUME_TEXT = {
 NOT_APPLIED = [
     "Customs duty exemptions and concessions under the Fifth Schedule, FTA/PTA and other SROs are not in the store; only the tariff CD is applied.",
     "Conditional sales tax exemptions and reduced rates (Sixth, Eighth and Fifth Schedule rows with conditions) are NOT applied unless the caller lists the rule id in claimed_rules; see possible_rules_not_applied.",
+    "Federal excise duty: Third Schedule exemptions are never applied (listed under possible_rules_not_applied); FED notifications issued during the year are not in data/raw (OQ-A6-9); electric vehicles are not computed (OQ-A6-1).",
     "Schedule entries that name goods only in words (no PCT code) cannot be matched by code and are not checked.",
     "Section 53A ITO (possible 1% reduction of withholding taxes from 1 Jul 2026) is not applied: no notification under it is in data/raw (OQ-A3-7).",
     "Minimum values notified under ITO s.148(6A) and the Customs valuation rulings are not applied: the caller supplies the assessable value.",
@@ -343,6 +351,11 @@ def compute_duty(code, assessable_value_pkr, as_of_date, importer=None, quantity
         acd_amt = Decimal("0.00")
         _line(bill, "ACD", "Additional customs duty", {"kind": "percent", "pct": "0"}, "assessable value", V, acd_amt, cite, note=note, assumptions=("REGIME",))
 
+    # ---------------- federal excise duty (FED Act 2005) and special excise duty (Table IA)
+    fed_base = (V + cd_amt + rd_total + acd_amt) if (cd_amt is not None and rd_known and acd_amt is not None) else None
+    fed = apply_fed(conn, c, d, fed_base, facts, bill, quantity, quantity_unit, R, _line)
+    fed_amt, sed_amt = fed["fed"], fed["sed"]
+
     # ---------------- sales tax
     st_app, st_exc = collect(conn, "sales_tax_rules", c, d, prefilter=make_st_prefilter(facts))
     for r, why in st_exc:
@@ -350,7 +363,7 @@ def compute_duty(code, assessable_value_pkr, as_of_date, importer=None, quantity
             v = rule_view("sales_tax_rules", r, "ST")
             v["why_not_applied"] = why
             bill.possible.append(v)
-    known = cd_amt is not None and rd_known and acd_amt is not None
+    known = cd_amt is not None and rd_known and acd_amt is not None and fed["ok"]
     st_amt = vat_amt = it_amt = None
     third = [r for r in st_app if r["rule_group"] == "ST-3RD"]
     st_rows_exempt = [r for r in st_app if r["rate_kind"] == "exempt" and r["rule_group"] in ("ST-6TH-T1", "ST-6TH-T3")]
@@ -363,7 +376,7 @@ def compute_duty(code, assessable_value_pkr, as_of_date, importer=None, quantity
 
     V_ST = None
     if known:
-        V_ST = V + cd_amt + rd_total + acd_amt
+        V_ST = V + cd_amt + rd_total + acd_amt + fed_amt + sed_amt
     st_decision = None  # (kind, pct, row, extra_assumption)
     if st_rows_exempt:
         st_decision = ("exempt", Decimal(0), st_rows_exempt[0])
@@ -401,7 +414,7 @@ def compute_duty(code, assessable_value_pkr, as_of_date, importer=None, quantity
         if st_decision[2]["status"] == "needs_review":
             bill.notes.append("The exemption row is needs_review and the code is also in the Third Schedule (retail-price goods): if the exemption row is wrong, sales tax would be charged on the retail price.")
         third = []
-    base_st, base_st_label = V_ST, "V + CD + RD + ACD (sales tax value, s.2(46)(d))"
+    base_st, base_st_label = V_ST, "V + CD + RD + ACD + FED + SED (sales tax value, s.2(46)(d))"
     if third and st_decision and st_decision[0] == "percent":
         rp = facts.g("retail_price_total_pkr")
         if rp is None:
@@ -467,14 +480,14 @@ def compute_duty(code, assessable_value_pkr, as_of_date, importer=None, quantity
             r = vat_rows[0]
             vat_amt = R(V_ST * _pct(r) / HUNDRED)
             _line(bill, "VAT", "Value addition tax at import (Twelfth Schedule)", {"kind": "percent", "pct": fmt(_pct(r))},
-                  "V + CD + RD + ACD", V_ST, vat_amt, _cite("sales_tax_rules", r, "ST"), r, assumptions=("OPEN10", "VATFACTS"))
+                  "V + CD + RD + ACD + FED + SED", V_ST, vat_amt, _cite("sales_tax_rules", r, "ST"), r, assumptions=("OPEN10", "VATFACTS"))
     # further tax (unregistered) - shown, not in total
     ft = group_rows(conn, "sales_tax_rules", "ST-ACT-S3-1A", d)
     if reg == "unregistered" and ft and st_decision and st_decision[0] == "percent" and V_ST is not None:
         r = ft[0]
         amt = R(V_ST * _pct(r) / HUNDRED)
         _line(bill, "FURTHER_TAX", "Further tax, unregistered person (s.3(1A)) - NOT in total", {"kind": "percent", "pct": fmt(_pct(r))},
-              "V + CD + RD + ACD", V_ST, amt, _cite("sales_tax_rules", r, "ST"), r, assumptions=("OPEN4",), included=False,
+              "V + CD + RD + ACD + FED + SED", V_ST, amt, _cite("sales_tax_rules", r, "ST"), r, assumptions=("OPEN4",), included=False,
               note="The Act text puts this on supplies to unregistered persons; collection at import is unconfirmed (OPEN-4).")
     bill.notes.append("Extra tax (s.3(5)) is a power clause with no rate in the Act; nothing is added.")
 
@@ -520,8 +533,8 @@ def compute_duty(code, assessable_value_pkr, as_of_date, importer=None, quantity
                     base_it = None if rp is None else D(rp) + st_amt
                     base_it_label = "retail price + sales tax (ITO s.148(9)(a))"
                 else:
-                    base_it = V + cd_amt + rd_total + acd_amt + st_amt + (vat_amt or Decimal(0))
-                    base_it_label = "V + CD + RD + ACD + ST + VAT (ITO First Schedule Part II col. 3, s.148(9)(b))"
+                    base_it = V + cd_amt + rd_total + acd_amt + fed_amt + sed_amt + st_amt + (vat_amt or Decimal(0))
+                    base_it_label = "V + CD + RD + ACD + FED + SED + ST + VAT (ITO First Schedule Part II col. 3, s.148(9)(b))"
                 if base_it is not None:
                     pct = _pct(chosen)
                     it_amt = R(base_it * pct / HUNDRED)
@@ -530,8 +543,6 @@ def compute_duty(code, assessable_value_pkr, as_of_date, importer=None, quantity
                           assumptions=("OPEN2", "OPEN10") if not third_goods else (), note=f"Class Part {ROMAN[cls]}: " + (cls_row["clause"] if cls_row else "residual (no Part I/II entry)"))
         bill.notes.append("Income tax at import is a minimum tax on the importer's income (ITO s.148(7)); it is not shown as adjustable here.")
 
-    if c.startswith(("8702", "8703", "8704", "8711")):
-        bill.flag("FED_not_included: federal excise duty may apply to vehicles (Salient Features 2026-27; Federal Excise Act not in data/raw, OPEN-1)")
     if c.startswith("1701"):
         bill.flag("sugar_notifications_not_applied: SRO 1215/1217/1832/527/663 (sugar) name no PCT code; the reduced sugar rates are stored needs_review and are NOT applied. Ask Maaz (OQ-A3-3).")
     if c.startswith(PHONE_PREFIXES):
@@ -559,7 +570,7 @@ def compute_duty(code, assessable_value_pkr, as_of_date, importer=None, quantity
         "cannot_compute": bill.cannot,
         "assumptions": [{"id": k, "text": v} for k, v in bill.assumptions.items()],
         "flags": bill.flags,
-        "review_required": bool(bill.flags) or bool(bill.assumptions.keys() - {"ROUNDING", "FED"}),
+        "review_required": bool(bill.flags) or bool(bill.assumptions.keys() - {"ROUNDING", "FED", "FED_DATE"}),
         "possible_rules_not_applied": bill.possible,
         "notes": bill.notes,
         "not_applied": NOT_APPLIED,
@@ -567,11 +578,13 @@ def compute_duty(code, assessable_value_pkr, as_of_date, importer=None, quantity
         "rounding": {"mode": rounding, "rule": ASSUME_TEXT["ROUNDING"]},
     }
     if status == "computed":
-        tot = {k: Decimal(0) for k in ("customs_duties", "sales_tax", "income_tax")}
+        tot = {k: Decimal(0) for k in ("customs_duties", "federal_excise_duty", "sales_tax", "income_tax")}
         for ln in bill.lines:
             a = D(ln["amount_pkr"])
             if ln["tax"] in ("CD", "RD", "RD_USED_VEHICLE", "ACD"):
                 tot["customs_duties"] += a
+            elif ln["tax"] in ("FED", "SED"):
+                tot["federal_excise_duty"] += a
             elif ln["tax"] in ("ST", "VAT"):
                 tot["sales_tax"] += a
             elif ln["tax"] == "IT":
