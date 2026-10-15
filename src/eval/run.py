@@ -108,21 +108,23 @@ def main(argv=None):
     ap.add_argument("--ids", nargs="+")
     ap.add_argument("--sample", type=int, help="N cases per kind, fixed random subset")
     ap.add_argument("--seed", type=int, default=1)
-    ap.add_argument("--max-llm-calls", type=int, default=100, help="cap on LIVE Gemini calls in this process (cache hits are free)")
+    ap.add_argument("--max-llm-calls", type=int, default=100, help="cap on LIVE calls in this process (cache hits are free)")
     ap.add_argument("--rerun-errors", action="store_true")
     ap.add_argument("--report", action="store_true", help="only rebuild the report")
-    ap.add_argument("--out", type=Path, default=OUT)
+    ap.add_argument("--llm", choices=("gemini", "deepseek"), default="gemini", help="which provider answers; results are kept in a folder per provider")
+    ap.add_argument("--out", type=Path, default=None)
     a = ap.parse_args(argv)
+    a.out = a.out or OUT / a.llm
     if not a.report:
-        from src.agent import GeminiLLM
+        from src.agent import DeepSeekLLM, GeminiLLM
 
-        llm = GeminiLLM(max_calls=a.max_llm_calls)
+        llm = (DeepSeekLLM if a.llm == "deepseek" else GeminiLLM)(max_calls=a.max_llm_calls)
         cases = select(load_cases(tuple(k for k in a.kinds if k != "duty")) + (load_duty_cases() if "duty" in a.kinds else []), a.sample, a.seed, a.ids)
         res = run(a.systems, cases, llm, a.out, a.rerun_errors)
-        print(res, "| live calls:", llm.stats["live_calls"], "cache hits:", llm.stats["cache_hits"])
+        print(res, "| live calls:", llm.stats["live_calls"], "cache hits:", llm.stats["cache_hits"], "| tokens in/out:", llm.stats.get("tokens_in"), llm.stats.get("tokens_out"))
     from .report import write_report
 
-    write_report(a.out)
+    write_report(a.out, Path(f"docs/eval_report_{a.llm}.md"), a.llm)
 
 
 if __name__ == "__main__":

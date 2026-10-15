@@ -4,8 +4,9 @@ Code: `src/eval/` (`cases.py`, `systems.py`, `metrics.py`, `citations.py`, `run.
 The numbers live in `docs/eval_report.md`, which is **generated** from `data/processed/eval/results_<system>.jsonl`. Nothing in this file is a result.
 
 ## Run
+Choose the LLM with `--llm gemini` (default, free tier) or `--llm deepseek` (paid, no daily quota; key `DEEPSEEK_API_KEY` in `.env`; model `DEEPSEEK_MODEL`, default `deepseek-flash`; `DEEPSEEK_THINKING`, default `disabled`). Results go to `data/processed/eval/<llm>/` and the report to `docs/eval_report_<llm>.md`. One report uses one LLM for all three systems; numbers from different LLMs are never mixed.
 ```
-python -m src.eval.run --sample 5 --systems plain_llm llm_rag full_graph --max-llm-calls 60   # small fixed subset (5 real + 5 synthetic)
+python -m src.eval.run --llm deepseek --sample 5 --systems plain_llm llm_rag full_graph --max-llm-calls 60   # small fixed subset (5 real + 5 synthetic)
 python -m src.eval.run --max-llm-calls 120                                                      # everything, resumable
 python -m src.eval.run --kinds duty --systems full_graph                                        # hand-computed bills
 python -m src.eval.run --report                                                                 # rebuild docs/eval_report.md only
