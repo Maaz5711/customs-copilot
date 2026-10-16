@@ -6,13 +6,13 @@ LLM used for every system in this report: **deepseek** (results in `data\process
 
 ## Coverage (cases run so far)
 
-| System | real | synthetic | errors/crashes |
-|---|---|---|---|
-| plain_llm | 0 | 0 | 0 |
-| llm_rag | 0 | 0 | 0 |
-| full_graph | 0 | 0 | 1 |
-| full_graph_assisted | 0 | 0 | 0 |
-| tariffai | 0 | 0 | 0 |
+| System | real | synthetic | importer GD lines | errors/crashes |
+|---|---|---|---|---|
+| plain_llm | 0 | 0 | 150 | 0 |
+| llm_rag | 0 | 0 | 150 | 0 |
+| full_graph | 0 | 0 | 150 | 1 |
+| full_graph_assisted | 0 | 0 | 0 | 0 |
+| tariffai | 0 | 0 | 0 | 0 |
 
 Systems with results: plain_llm, llm_rag, full_graph. Compared on the **150 cases that every one of them has run** (real 0, synthetic 0).
 

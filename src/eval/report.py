@@ -51,10 +51,10 @@ def build(out: Path = OUT, llm_name: str = "") -> str:
           "chemicals. Intervals are wide. Real and synthetic results are never averaged. Systems are compared on the same cases only.", ""]
     if not ran:
         return "\n".join(L + ["No results yet. Run `python -m src.eval.run`."]) + "\n"
-    L += ["## Coverage (cases run so far)", "", "| System | real | synthetic | errors/crashes |", "|---|---|---|---|"]
+    L += ["## Coverage (cases run so far)", "", "| System | real | synthetic | importer GD lines | errors/crashes |", "|---|---|---|---|---|"]
     for s in ALL:
         r = res[s]
-        L.append(f"| {s} | {sum(1 for x in r.values() if x['kind'] == 'real')} | {sum(1 for x in r.values() if x['kind'] == 'synthetic')} | "
+        L.append(f"| {s} | {sum(1 for x in r.values() if x['kind'] == 'real')} | {sum(1 for x in r.values() if x['kind'] == 'synthetic')} | {sum(1 for x in r.values() if x['kind'] == 'importer')} | "
                  f"{sum(1 for x in r.values() if x['pred']['behavior'] == 'error')} |")
     common = (set.intersection(*[set(res[s]) for s in ran]) if ran else set()) & set(cases)
     L += ["", f"Systems with results: {', '.join(ran)}. Compared on the **{len(common)} cases that every one of them has run** "
