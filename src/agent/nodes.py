@@ -95,6 +95,8 @@ class Config:
     # one small LLM call proposes 4-digit headings; they only widen the candidate pool. AGENT_USE_HINTS=0 switches it off (the unit tests do).
     use_hints: bool = field(default_factory=lambda: os.environ.get("AGENT_USE_HINTS", "1") != "0")
     floors: dict = field(default_factory=lambda: dict(DEFAULT_FLOORS))
+    # ask about customs-duty concessions (Fifth Schedule claims, China FTA origin / Form E) once a bill is computed. AGENT_ASK_CONCESSIONS=0 switches it off (older unit tests do)
+    ask_concessions: bool = field(default_factory=lambda: os.environ.get("AGENT_ASK_CONCESSIONS", "1") != "0")
 
 
 @dataclass
@@ -733,7 +735,7 @@ def make_calculate(deps: Deps):
         if duty.get("status") not in ("computed", "cannot_compute"):
             return {"lookup": lookup, "duty": duty, "route": "verify", "trace": [f"calculate: tool status {duty.get('status')}"]}
         asked = list(state.get("concession_asked") or [])
-        cqs = concession_questions(duty, asked, unknown) if (rounds_left and duty.get("status") == "computed") else []
+        cqs = concession_questions(duty, asked, unknown) if (cfg.ask_concessions and rounds_left and duty.get("status") == "computed") else []
         if cqs:
             return {"lookup": lookup, "duty": duty, "pending_questions": cqs, "clarify_kind": "duty_input", "concession_asked": asked + [q["field"] for q in cqs],
                     "route": "clarify", "trace": [f"calculate: concessions possible -> asking {[q['field'] for q in cqs]}"]}
@@ -776,7 +778,7 @@ def bill_checks(duty: dict | None, lookup: dict | None, date_iso: str) -> tuple[
                 s["customs_duties"] += a
             elif ln["tax"] in ("FED", "SED"):
                 s["federal_excise_duty"] += a
-            elif ln["tax"] in ("ST", "VAT"):
+            elif ln["tax"] in ("ST", "VAT", "FURTHER_TAX"):
                 s["sales_tax"] += a
             elif ln["tax"] == "IT":
                 s["income_tax"] += a

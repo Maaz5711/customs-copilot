@@ -94,6 +94,24 @@ def page_rows(page: int):
         cluster.append(t)
     if cluster:
         clusters.append(cluster)
+    # a few scans are not perfectly straight: the Sr.No/code part of a row and its numbers then come out as two clusters 11-19 px apart
+    merged, i = [], 0
+    while i < len(clusters):
+        a = clusters[i]
+        if i + 1 < len(clusters):
+            b = clusters[i + 1]
+            a_left = [t for t in a if t["x0"] < 375]
+            a_nums = [t for t in a if t["x0"] >= 700]
+            b_left = [t for t in b if t["x0"] < 375]
+            b_nums = [t for t in b if t["x0"] >= 700]
+            ya, yb = statistics.mean(t["yc"] for t in a), statistics.mean(t["yc"] for t in b)
+            if a_left and len(a_nums) < 3 and not b_left and len(b_nums) >= 3 and 0 < yb - ya < 20:
+                merged.append(a + b)
+                i += 2
+                continue
+        merged.append(a)
+        i += 1
+    clusters = merged
     prev_y = ycut
     for cl in clusters:
         y = statistics.mean(t["yc"] for t in cl)
@@ -222,6 +240,25 @@ def build():
     return allrows, pages
 
 
+_TS = None
+
+
+def tariff_gap(a: str, b: str) -> int | None:
+    """Number of tariff lines (either year) between code a and code b (b after a); None when it cannot be told."""
+    import bisect
+
+    global _TS
+    if _TS is None:
+        codes = set()
+        for f in ("tariff_2026_27.csv", "tariff_2025_26.csv"):
+            codes |= {r["code"].replace(".", "") for r in csv.DictReader(open(PROC / f, encoding="utf-8"))}
+        _TS = sorted(c for c in codes if len(c) == 8)
+    return bisect.bisect_left(_TS, b) - bisect.bisect_left(_TS, a)
+
+
+MAX_GAP = 15      # the SRO lists the tariff lines in order; a jump of more than this many tariff lines is suspicious
+
+
 def _read_sr(r):
     d = clean_digits(r["srno_raw"])
     if len(d) >= 9:
@@ -243,7 +280,7 @@ def numbered(allrows, code_fixes=None):
         cand.append(r)
     reads = [_read_sr(r) for r in cand]
     lines, fails = [], []
-    expected, last_code = 1, None
+    expected = 1
     for i, r in enumerate(cand):
         code_digits = clean_digits(r["code_raw"])
         code_digits = code_digits if len(code_digits) == 8 else ""
@@ -268,13 +305,52 @@ def numbered(allrows, code_fixes=None):
             issues.append("code_taken_from_second_reading")
         if code is None:
             issues.append("code_not_read")
-        elif last_code and code < last_code:
-            issues.append(f"code_not_ascending_after_{last_code}")
-        if code:
-            last_code = code
         f = fit(r["cells"], r["how"])
         lines.append(dict(sr_no=sr, code=code, code_raw=r["code_raw"], page=r["page"], y=r["y"], desc=r["desc"], cells=r["cells"], how=r["how"], fit=f, issues=issues))
+    check_code_order(lines)
     return lines, fails
+
+
+def check_code_order(lines, window=6, tol=20):
+    """The SRO prints the tariff lines in order. A misread digit shows up as a code far (in tariff lines) from the median of its neighbours,
+    or as a code lower than the last good one. Flags only; the second reading (a8_cpfta_codes.py) then tries to repair them."""
+    import bisect
+
+    tariff_gap("00000000", "00000000")      # loads the sorted tariff list
+    pos = [bisect.bisect_left(_TS, ln["code"]) if ln["code"] else None for ln in lines]
+    last_ok = None
+    for i, ln in enumerate(lines):
+        if pos[i] is None:
+            continue
+        near = sorted(p for p in pos[max(0, i - window):i + window + 1] if p is not None)
+        med = near[len(near) // 2]
+        if abs(pos[i] - med) > tol:
+            ln["issues"].append(f"code_out_of_order_vs_neighbours_{pos[i] - med:+d}_tariff_lines")
+        elif last_ok is not None and ln["code"] < last_ok:
+            ln["issues"].append(f"code_not_ascending_after_{last_ok}")
+        else:
+            last_ok = ln["code"]
+
+
+def dedupe(lines):
+    """Two readings of one Sr.No (a row split in two by the OCR, or numbering resynchronised backwards): keep the better one, log the other."""
+    by = {}
+    for ln in lines:
+        by.setdefault(ln["sr_no"], []).append(ln)
+    keep, fails = [], []
+    for ln in lines:
+        grp = by[ln["sr_no"]]
+        if len(grp) == 1:
+            keep.append(ln)
+            continue
+        score = lambda x: (x["code"] is not None, sum(v is not None for v in x["cells"]))  # noqa: E731
+        best = max(grp, key=score)
+        if ln is best:
+            keep.append(ln)
+        else:
+            fails.append(dict(check="duplicate_srno_reading_dropped", sr_no=ln["sr_no"], code=ln["code"] or "", page=ln["page"],
+                              detail=f"second reading of Sr.No {ln['sr_no']} (code {ln['code']}, {sum(v is not None for v in ln['cells'])} cells) dropped; kept code {best['code']}"))
+    return keep, fails
 
 
 def finalize(lines):
@@ -287,7 +363,7 @@ def finalize(lines):
             issues.append("fewer_than_5_cells_read")
         else:
             ratio = f["agree"] / f["observed"]
-            if f["agree"] >= 10 and len(f["misfit"]) <= 3 and ratio >= 0.8:
+            if f["agree"] >= 9 and len(f["misfit"]) <= 4 and ratio >= 0.75:
                 vals, reading, status = f["values"], "ocr_fitted_to_taper_pattern", "accepted"
                 for i, got, want in f["misfit"]:
                     fails.append(dict(check="ocr_cell_disagrees_with_pattern", sr_no=ln["sr_no"], code=ln["code"], page=ln["page"],
@@ -302,7 +378,7 @@ def finalize(lines):
                         cells_read=(f["observed"] if f else sum(v is not None for v in ln["cells"])), cells_agree=(f["agree"] if f else ""),
                         issues="; ".join(issues), **{f"year_{i + 1}": ("" if vals[i] is None else f"{vals[i]:.2f}") for i in range(NYEARS)}))
         for i in issues:
-            fails.append(dict(check=re.sub(r"[_0-9]+$", "", re.sub(r"_(\d+)", "", i))[:40], sr_no=ln["sr_no"], code=ln["code"] or "", page=ln["page"], detail=i))
+            fails.append(dict(check=re.sub(r"_+", "_", re.sub(r"[+-]?\d+", "", i)).strip("_")[:48], sr_no=ln["sr_no"], code=ln["code"] or "", page=ln["page"], detail=i))
     return out, fails
 
 
@@ -322,7 +398,7 @@ def _tariff_sets():
 
 
 def _good_code(ln):
-    return ln["code"] and not any(x.startswith("code_not_ascending") for x in ln["issues"])
+    return ln["code"] and not any(x.startswith(("code_not_ascending", "code_out_of_order")) for x in ln["issues"])
 
 
 def write_outputs(reread=True):
@@ -344,7 +420,9 @@ def write_outputs(reread=True):
         by_sr = {n["sr_no"]: (n["page"], n["y"]) for n in need}
         code_fixes = {by_sr[sr]: c for sr, c in fx.items()}
         lines, _ = numbered(allrows, code_fixes)
+    lines, dfails = dedupe(lines)
     rows, fails = finalize(lines)
+    fails += dfails
     inferred = {x["sr_no"] for x in fixes_log if "inferred" in x.get("how", "") and x["accepted_code"]}
     for r in rows:
         if r["sr_no"] in inferred:

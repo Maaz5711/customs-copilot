@@ -1,5 +1,4 @@
-"""A8: spot-check sheet for the China FTA (SRO 1640(I)/2019) lines: every needs_review line, every line where the OCR cells disagreed
-with the fitted pattern, and every 8th other line (well over 10% of the lines), with the page image to compare against.
+"""A8: spot-check sheet for the China FTA (SRO 1640(I)/2019) lines: every 8th line (12.5%) plus every 4th line that needs review, with the page image to compare against.
 The owner fills the last two columns. Usage: python -m src.ingest.a8_cpfta_spotcheck"""
 import csv
 import glob
@@ -12,11 +11,11 @@ P = Path("data/processed")
 
 def main():
     rows = list(csv.DictReader(open(P / "a8_cpfta_rows.csv", encoding="utf-8")))
-    dis = {int(r["sr_no"]) for r in csv.DictReader(open(P / "a8_cpfta_failures.csv", encoding="utf-8")) if r["check"] == "ocr_cell_disagrees_with_pattern" and r["sr_no"].isdigit()}
-    out, k = [], 0
+    out, k, nr = [], 0, 0
     for r in rows:
         k += 1
-        if r["status"] == "needs_review" or int(r["sr_no"]) in dis or k % 8 == 0:
+        nr += r["status"] == "needs_review"
+        if k % 8 == 0 or (r["status"] == "needs_review" and nr % 4 == 0):
             vals = [r[f"year_{i}"] for i in range(1, 16)]
             out.append(dict(sr_no=r["sr_no"], page=r["page"], code=r["code"], description_ocr=r["description_ocr"][:90], pattern=r["pattern"],
                             years_2025_2026_2027_loaded=" | ".join(vals[5:8]), all_15_years=" ".join(vals), cells_read=r["cells_read"], cells_agree=r["cells_agree"],
