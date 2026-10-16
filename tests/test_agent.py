@@ -375,7 +375,7 @@ def test_free_text_reply_to_several_questions_is_mapped_by_the_llm_then_read_by_
     t2 = agent.resume(t1.thread_id, "We are not registered, but yes we sell them as they are, and we are a filer")
     assert t2.final["status"] == "answer" and llm.count("map_answers") == 1
     assert t2.final["bill"]["totals"]["total_payable_pkr"] == compute_duty("6109.1000", 1000000, D15, importer={"registration_status": "unregistered", "commercial_importer": True, "active_taxpayer": True}, db_path=db)["totals"]["total_payable_pkr"]
-    assert any(ln["tax"] == "FURTHER_TAX" for ln in t2.final["bill"]["optional_lines_not_in_total"])      # unregistered: further tax shown, not added
+    assert any(ln["tax"] == "FURTHER_TAX" for ln in t2.final["bill"]["lines"])      # unregistered at the 18% rate: further tax is added (seen on real assessed GDs)
 
 
 def code_only_llm(value_text, code, **extra):

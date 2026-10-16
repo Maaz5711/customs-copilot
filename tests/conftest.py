@@ -2,3 +2,4 @@
 import os
 
 os.environ["AGENT_USE_HINTS"] = "0"
+os.environ["AGENT_ASK_CONCESSIONS"] = "0"      # tests/test_agent_concessions.py turns it on explicitly

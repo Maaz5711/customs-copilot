@@ -22,6 +22,7 @@ Customs Copilot (Pakistan): an agent that picks the 8-digit PCT code and compute
 | Tools | src/tools, docs/tools.md | done: lookup_code, get_applicable_sros, compute_duty (MCP) |
 | LangGraph agent | src/agent, docs/agent.md, docs/agent_notes.md | works live with Gemini free tier; retrieval for big headings weak |
 | Ground truth | data/ground_truth (README) | 79 real (+5 out of scope), 60 synthetic (unverified); owner reviewed 20 |
+| Concessions (A7/A8, added 2026-10-16) | src/ingest/a7_fifth*.py, a8_cpfta*.py, src/tools/concessions.py, docs/concessions_findings.md, a8_cpfta_findings.md, gd_concession_check.md | Fifth Schedule FY2025-26 (FBR file, 1,519 rules) and FY2026-27 (1,349) and China FTA Phase II (6,778 of 6,786 SRO lines, OCR + pattern fit) in the store; compute_duty / get_applicable_sros offer them (bill with and without, never applied unless claimed); agent asks about conditions and origin/Form E. Against real GD lines: 98.4% of China FTA lines whose code is in our table match the CD charged; 21% of FTA lines have HS 2022 codes missing from the 2019 table (amendments not collected, OQ-A8-1). Owner spot checks pending (OQ-A7-5, OQ-A8-4) |
 | Evaluation (C2) | src/eval, docs/eval.md, docs/eval_versions.md | DONE for v0-v4 on DeepSeek flash (key in .env). Full agent real cases: exact 8-digit line top-1 38/70 (54%), right line in top 3 51/70 (73%); plain LLM 18/70, LLM+search 24/70. TariffAI baseline run (6-digit only). All numbers in docs/eval_versions.md with intervals |
 | UI/API, README results | - | NOT started |
 
@@ -44,7 +45,7 @@ Customs Copilot (Pakistan): an agent that picks the 8-digit PCT code and compute
 - FED: included in compute_duty (done). EV cars, 3001 cc, CKD vehicles are refused rather than guessed until the owner/consultant answers OQ-A6-1/2/4.
 - CKD vs CBU: the agent asks the importer at runtime.
 - Legal notes are labelled "HS 2022 edition, applicability to FY2025-26 and FY2026-27 assumed, not proven". Chapter 99 sub-chapter conditions (tariff pp.586-602) are out of scope.
-- Customs concession SROs (Fifth Schedule, FTA/PTA) and sugar/mobile-phone tax tables: out of scope for v1 (tools warn / cannot_compute).
+- Fifth Schedule and China FTA Phase II concessions: added 2026-10-16 (approved by the owner). Other FTAs/PTAs and sugar/mobile-phone tax tables: out of scope (tools warn / cannot_compute).
 - No time estimates (CLAUDE.md). Work is ordered by dependency.
 - Owner style: every manual task is an HTML task page (scan + instructions + answer boxes + Save CSV). Minimise his work; AI second readers do the rest and are labelled as such.
 

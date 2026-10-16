@@ -71,6 +71,7 @@ File: `data/raw/cpfta/2020111213219376SRO1640(I)2019dated31.12.2019.pdf`, 177 pa
 * Rates are by **calendar year**: the 1-Jan-2025 column applies to Jan-Dec 2025, the 1-Jan-2026 column to 2026, the 1-Jan-2027 column to 2027. FY2025-26 (1 Jul 2025 - 30 Jun 2026) therefore uses **Year 6 (Jul-Dec 2025) and Year 7 (Jan-Jun 2026)**; FY2026-27 uses **Year 7 (Jul-Dec 2026) and Year 8 (Jan-Jun 2027)**.
 
 ### Edge cases
+0. Reading method and results: `docs/a8_cpfta_findings.md`. 6,778 of 6,786 lines were read; check against the importer's real customs data: `docs/gd_concession_check.md`.
 1. HS edition: the SRO is from 2019 (HS 2017 codes). The tariffs of FY2025-26/2026-27 use HS 2022. Codes that no longer exist in the tariff are listed in the failures report. The amendments to SRO 1640(I)/2019 (FBR "Active SROs Import" row 26: "Amending SROs of 1640(I)/2019") are **not in `data/raw`**. They may carry the code changes and later edits. This is the open blocker for full coverage: owner question OQ-A8-1. The parse is labelled "as issued 31 Dec 2019; amendments not applied".
 2. Page 2 is one image in a different size (1368 x 320 px strip) of the same table; the page contents continue from page 1 (rows 1-19 on p.1, 20-60 on p.2).
 3. The scan is tilted by up to about one degree; the reader straightens it first.

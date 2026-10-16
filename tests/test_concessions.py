@@ -126,3 +126,74 @@ def test_get_applicable_sros_lists_options_without_applying():
     r = get_applicable_sros("8201.3000", "2026-08-01")
     c = r["concessions"]["fifth_schedule"]
     assert c["status"] == "checked" and c["options"][0]["clause"].startswith("Part I, S.No 1") and r["concessions"]["applicable"] == []
+
+
+# ================================================================ China-Pakistan FTA Phase II (SRO 1640(I)/2019), hand-computed
+# V = 1,000,000, registered, commercial importer, not a manufacturer (VAT 3% charged), filer. Rates read from the SRO page images (page 3):
+# Sr.No 74 (0207.1200): A15 line 25.00 25.00 25.00 22.92 20.83 18.75 16.67 14.58 ...; Sr.No 63 (0205.0000): 20.00 16.67 13.33 10.00 6.67 3.33 0.00 ...;
+# Sr.No 73 (0207.1100): 20.00 in all years. Normal CD of all three is 20% (tariff), ST 25%, VAT 3%, IT 6% (Part III commercial).
+CN = {"origin_country": "CN", "has_certificate_of_origin": True}
+COMM = {"registration_status": "registered", "commercial_importer": True, "manufacturer_in_house_use": False, "active_taxpayer": True}
+
+
+def fta(code, date, goods=None):
+    return compute_duty(code, V, date, importer=COMM, goods=goods if goods is not None else {})
+
+
+def test_fta_1_poultry_2026_16_67_percent():
+    # Year 7 column (1-Jan-26): 16.67%. Without: CD 200,000 + ACD 2% 20,000; ST 25% x 1,220,000 = 305,000; VAT 3% x 1,220,000 = 36,600;
+    # IT 6% x 1,561,600 = 93,696; total 655,296.  With: CD 166,700 + ACD 20,000 (ACD stays); V_ST 1,186,700: ST 296,675; VAT 35,601;
+    # IT 6% x 1,518,976 = 91,138.56; total 610,114.56.
+    base = fta("0207.1200", "2026-08-01", CN)
+    assert base["totals"]["total_payable_pkr"] == "655296.00" and base["concessions"]["applied"] == []
+    o = base["concessions"]["china_fta"]["options"][0]
+    assert o["listed_rate"] == "16.67%" and o["effective_cd_pct"] == "16.67" and o["page"] == 3 and o["bill_if_applied"]["totals"]["total_payable_pkr"] == "610114.56"
+    assert [q["id"] for q in base["concessions"]["questions"]] == []               # origin and certificate already given: nothing left to ask
+    r = fta("0207.1200", "2026-08-01", dict(CN, claim_china_fta=True))
+    assert r["totals"] == {"customs_duties": "186700.00", "federal_excise_duty": "0.00", "sales_tax": "332276.00", "income_tax": "91138.56", "total_payable_pkr": "610114.56"}
+    assert r["concessions"]["bill_without_concession"]["totals"]["total_payable_pkr"] == "655296.00"
+    assert any(a["id"] == "FTA_BASE" for a in r["assumptions"]) and r["review_required"]
+
+
+def test_fta_2_same_code_in_2025_uses_the_2025_column():
+    # 1 Sep 2025 (FY2025-26, SRO 1151: ACD 4% in the 20% slab): Year 6 column 18.75%. CD 187,500 + ACD 40,000; V_ST 1,227,500: ST 306,875; VAT 36,825;
+    # IT 6% x 1,571,200 = 94,272; total 665,472 (without: 682,432).
+    r = fta("0207.1200", "2025-09-01", dict(CN, claim_china_fta=True))
+    assert r["totals"]["total_payable_pkr"] == "665472.00" and r["concessions"]["bill_without_concession"]["totals"]["total_payable_pkr"] == "682432.00"
+    assert r["concessions"]["applied"][0]["clause"].startswith("Table Sr.No 74, column for 2025")
+
+
+def test_fta_3_a07_line_nearly_phased_out():
+    # Sr.No 63 (0205.0000, A07 base 20): 1-Jan-25 column 3.33%. CD 33,300 + ACD 40,000; V_ST 1,073,300: ST 268,325; VAT 32,199; IT 6% x 1,373,824 = 82,429.44; total 456,253.44.
+    r = fta("0205.0000", "2025-09-01", dict(CN, claim_china_fta=True))
+    assert r["totals"]["total_payable_pkr"] == "456253.44"
+    r2 = fta("0205.0000", "2026-08-01", dict(CN, claim_china_fta=True))      # 1-Jan-26 column: 0.00%
+    assert r2["concessions"]["applied"][0]["effective_cd_pct"] == "0"
+
+
+def test_fta_4_constant_line_gives_no_saving_and_says_so():
+    base = fta("0207.1100", "2027-02-01", CN)       # Sr.No 73: 20.00 in 2027, equal to the tariff CD
+    o = base["concessions"]["china_fta"]["options"][0]
+    assert o["effective_cd_pct"] == "20" and "no_saving_preferential_rate_not_lower_than_normal_cd" in o["flags"]
+    assert o["bill_if_applied"]["totals"]["total_payable_pkr"] == base["totals"]["total_payable_pkr"]
+
+
+@pytest.mark.parametrize("goods", [{"claim_china_fta": True},                                                     # origin unknown
+                                   {"origin_country": "India", "has_certificate_of_origin": True, "claim_china_fta": True},
+                                   {"origin_country": "CN", "has_certificate_of_origin": False, "claim_china_fta": True},
+                                   {"origin_country": "CN", "claim_china_fta": True}])                            # certificate not answered
+def test_fta_never_applied_without_origin_and_certificate(goods):
+    r = fta("0207.1200", "2026-08-01", goods)
+    assert r["totals"]["total_payable_pkr"] == "655296.00" and r["concessions"]["applied"] == [] and r["concessions"]["notes"]
+
+
+def test_fta_questions_for_the_agent():
+    q0 = [q["id"] for q in fta("0207.1200", "2026-08-01", {})["concessions"]["questions"]]
+    assert q0 == ["origin_country"]
+    q1 = [q["id"] for q in fta("0207.1200", "2026-08-01", {"origin_country": "China"})["concessions"]["questions"]]
+    assert q1 == ["certificate_of_origin"]
+
+
+def test_code_without_a_row_in_the_2019_sro_offers_nothing():
+    r = fta("8201.3000", "2026-08-01", CN)
+    assert r["concessions"]["china_fta"]["options"] == [] and r["concessions"]["questions"] == [] or r["concessions"]["questions"][0]["id"] != "origin_country"
