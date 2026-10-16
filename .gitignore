@@ -22,3 +22,8 @@ data/processed/review/*.html
 data/processed/search_index/
 data/processed/cpfta_ocr/
 data/processed/a7_fifth_rules*_store.json
+
+# private derived data from an importer extract (never commit)
+data/processed/eval/gd_*.csv
+data/processed/eval/gd_*.json
+data/processed/eval/deepseek_importer/

@@ -64,3 +64,15 @@ def load_duty_cases(gt_dir: Path = GT) -> list[Case]:
             out.append(Case(id=r["id"], kind="duty", description=r["question"], as_of_date=r["as_of_date"], behavior="answer",
                             expected=digits(r["expected_code"])))
     return out
+
+
+IMPORTER_CASES = Path("data/raw/importer_data/cases_importer.csv")        # private (gitignored): derived from an importer's GD extract, see src/eval/gd_data.py
+
+
+def load_importer_cases(path: Path = IMPORTER_CASES) -> list[Case]:
+    """Real cleared Goods Declaration lines (Chapter 85, Feb 2026): description as typed by the clearing agent, the declared 8-digit code, the GD date."""
+    out = []
+    if path.exists():
+        for r in csv.DictReader(open(path, encoding="utf-8")):
+            out.append(Case(id=r["id"], kind="importer", description=r["description"], as_of_date=r["as_of_date"], behavior="answer", expected=digits(r["expected_code"])))
+    return out
