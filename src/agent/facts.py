@@ -156,11 +156,13 @@ def tool_args(inputs: dict) -> dict:
     goods = {k: v for k, v in (inputs.get("goods") or {}).items() if v is not None}
     # Fifth Schedule claims: the importer said "yes, I meet the conditions of this entry" (field claim.<rule_id>)
     claimed = sorted(k for k, v in (inputs.get("claim") or {}).items() if v is True)
-    return {
+    args = {
         "assessable_value_pkr": inputs.get("assessable_value_pkr"),
         "importer": importer or None,
         "goods": goods or None,
         "quantity": inputs.get("quantity"),
         "quantity_unit": inputs.get("quantity_unit"),
-        "claimed_rules": claimed or None,
     }
+    if claimed:
+        args["claimed_rules"] = claimed
+    return args
