@@ -54,6 +54,10 @@ Customs Copilot (Pakistan): an agent that picks the 8-digit PCT code and compute
 3. docs/owner_questions.md lists all other open legal questions (sugar window, S.No 84(i), etc.). None blocks the next phase.
 4. Baseline: clone Danial's TariffAI (MIT, reference only) so it can be run on the same cases at 6 digits.
 
+## Duty-side verification (2026-10-16)
+* Official WeBOC duty calculator used as an independent oracle: 49 FY2026-27 codes captured (`data/ground_truth/weboc_calculator_2026-10-16.json`), compared by `python -m src.eval.weboc_compare` -> `docs/weboc_comparison.md`. Result: of 33 codes our tool can compute on these inputs, CD/RD/ACD/ST(/FED) match WeBOC to the rupee on 30; 3 vehicle-part codes differ (WeBOC ACD 11%, OQ-W1). Income tax: found and fixed a real gap (non-filer doubling, ITO Tenth Schedule rule 1; tool now asks `importer.active_taxpayer`). WeBOC flat 12% IT and no 3% VAT are WeBOC simplifications (OQ-W2, OQ-W3).
+* The WeBOC form is a plain ASP.NET page; a short in-browser script (fields txtHSCode, txtQuantity, txtUnitValue, btnSaveBottom) reads it. Keep use light (about 150 requests so far, 1.2 s apart).
+
 ## NEXT STEPS (in order)
 1. Real answer key: owner is asking a friend (textile/electronics importer from China) for 30-50 products with the final accepted 8-digit code (kit in docs/case_collection/). When it arrives: add as a third case file (kind 'importer'), report separately, check for disputes vs clean cases. Real test set is mostly contested goods (66 of 79 are disputes), so scores are pessimistic for everyday goods.
 2. FBR email (docs/case_collection/email_draft.md) is for the owner to send: asks permission to use published documents in a free public tool, data files, a validation reviewer, and 5 legal questions. Legal note: FBR website terms allow copying unmodified single pages for sharing; our derived data should not be republished until permission arrives.
