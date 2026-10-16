@@ -29,6 +29,8 @@ def build(db_path=DEFAULT_DB_PATH) -> dict:
         if (PROC / csv_name).exists():      # mapped to the table contract; gitignored (rebuilt here), the CSV is the audited file
             (PROC / store_name).write_text(json.dumps(fifth_rows(PROC / csv_name), indent=1, ensure_ascii=False), encoding="utf-8")
             report["fifth_schedule_rules"] += load_table_file(conn, "fifth_schedule_rules", PROC / store_name)
+    if (PROC / "a8_cpfta_rules.csv").exists():
+        report["fta_rules"] = load_table_file(conn, "fta_rules", PROC / "a8_cpfta_rules.csv")
     notes = PROC / "legal_notes_store.json"      # derived from legal_notes.json (A4), kept in git so the mapping is auditable
     notes.write_text(json.dumps(legal_notes_rows(), indent=1, ensure_ascii=False), encoding="utf-8")
     report["legal_notes"] = load_table_file(conn, "legal_notes", notes)

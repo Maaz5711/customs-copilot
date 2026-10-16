@@ -40,7 +40,7 @@ def scripted_input(answers: dict, log: list):
     return fn
 
 
-ALL_ANSWERS = {"assessable_value_pkr": "1,000,000", "importer.registration_status": "registered", "importer.commercial_importer": "yes", "importer.manufacturer_in_house_use": "no"}
+ALL_ANSWERS = {"assessable_value_pkr": "1,000,000", "importer.registration_status": "registered", "importer.commercial_importer": "yes", "importer.active_taxpayer": "yes", "importer.manufacturer_in_house_use": "no"}
 
 
 def test_cli_interactive_asks_the_questions_and_prints_the_answer(db):
@@ -48,9 +48,9 @@ def test_cli_interactive_asks_the_questions_and_prints_the_answer(db):
     code = cli.main(["laptop computers", "--date", "2026-07-15"], input_fn=scripted_input(ALL_ANSWERS, log), out=out, llm=laptop_llm(), agent_kwargs=kwargs(db))
     text = out.getvalue()
     assert code == 0
-    assert "To calculate the duties I need these details" in text and "[1/4]" in text and "answer yes or no" in text and "type 'I don't know'" in text
+    assert "To calculate the duties I need these details" in text and "[1/5]" in text and "answer yes or no" in text and "type 'I don't know'" in text
     assert "TOTAL PAYABLE: PKR 197,800.00" in text and "decision support, not legal advice" in text
-    assert len(log) == 4                                                           # one prompt per question, nothing else asked
+    assert len(log) == 5                                                           # one prompt per question, nothing else asked
 
 
 def test_cli_debug_prints_the_node_path_and_llm_usage(db):
@@ -84,7 +84,7 @@ def test_cli_with_closed_stdin_prints_the_questions_and_how_to_continue(db):
     out = io.StringIO()
     code = cli.main(["laptop computers", "--date", "2026-07-15", "--db", str(PROC / "cache" / "unused_cli_test.sqlite")], input_fn=closed, out=out, llm=laptop_llm(), agent_kwargs=kwargs(db))
     t = out.getvalue()
-    assert code == 2 and "[1/4]" in t and "Not a terminal" in t and "--answer" in t and "Traceback" not in t
+    assert code == 2 and "[1/5]" in t and "Not a terminal" in t and "--answer" in t and "Traceback" not in t
     (PROC / "cache" / "unused_cli_test.sqlite").unlink(missing_ok=True)
 
 
@@ -138,7 +138,7 @@ def test_cli_with_no_question_and_no_terminal_explains_how_to_start(db):
 
 # ===================================================================== MCP-backed tools
 def test_mcp_toolbox_gives_the_same_results_as_in_process_tools_and_runs_the_agent(db):
-    imp = {"registration_status": "registered", "commercial_importer": True}
+    imp = {"registration_status": "registered", "commercial_importer": True, "active_taxpayer": True}
     local = ToolBox(db)
     mcp = McpToolBox(db_path=db)
     try:
@@ -151,7 +151,7 @@ def test_mcp_toolbox_gives_the_same_results_as_in_process_tools_and_runs_the_age
         llm = FakeLLM({"understand": understand(goods_description="men's cotton T-shirts", value_text="PKR 1,000,000", **IMPORTER_FULL),
                        "classify": classify(cand("6109.1000", 0.92)), "verify": verify()})
         agent = CustomsAgent(llm, retriever=StubRetriever(), notes_loader=no_notes, tools=mcp)
-        f = agent.ask("men's cotton T-shirts, value PKR 1,000,000, registered importer, commercial importer", as_of_date="2026-07-15").final
+        f = agent.ask("men's cotton T-shirts, value PKR 1,000,000, registered importer, commercial importer, filer", as_of_date="2026-07-15").final
         assert f["status"] == "answer" and "667,380.00" in f["text"]
     finally:
         mcp.close()

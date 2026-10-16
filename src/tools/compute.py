@@ -703,6 +703,10 @@ def compute_duty(code, assessable_value_pkr, as_of_date, importer=None, quantity
     fta = fta_block(conn, c, d, trow, goods)
     options = fifth["options"] + fta["options"]
     claimed_ids = {x for x in (claimed_rules or []) if str(x).startswith(("fifth_schedule_rules:", "fta_rules:"))}
+    from .rules import as_bool
+
+    if as_bool((goods or {}).get("claim_china_fta")):          # the caller asks for the China FTA rate of this code (origin and Form E are checked below)
+        claimed_ids |= {o["rule_id"] for o in fta["options"]}
     valid_ids = {o["rule_id"] for o in options}
     applied_opts = [o for o in options if o["rule_id"] in claimed_ids and o["_effective"] is not None]
     unknown_claims = sorted(claimed_ids - valid_ids)

@@ -66,6 +66,7 @@ def validate_understand(d: Any) -> dict:
         "engine_text": as_str(d.get("engine_text")), "value_text": as_str(d.get("value_text")), "quantity_text": as_str(d.get("quantity_text")),
         "registration_status": reg.lower() if reg and reg.lower() in ("registered", "unregistered") else None, "registration_quote": as_str(d.get("registration_quote")),
         "commercial_importer": as_bool(d.get("commercial_importer")), "commercial_quote": as_str(d.get("commercial_quote")),
+        "active_taxpayer": as_bool(d.get("active_taxpayer")), "active_taxpayer_quote": as_str(d.get("active_taxpayer_quote")),
         "manufacturer_in_house_use": as_bool(d.get("manufacturer_in_house_use")), "manufacturer_quote": as_str(d.get("manufacturer_quote")),
         "date_text": as_str(d.get("date_text")), "codes_text": [s for s in (as_str(c, 40) for c in as_list(d.get("codes_text"))) if s],
         "multiple_products": bool(as_bool(d.get("multiple_products"))), "off_topic": bool(as_bool(d.get("off_topic"))),

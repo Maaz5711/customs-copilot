@@ -56,6 +56,12 @@ SRO_FACTS = [
          valid_from="2026-06-30", valid_to=OPEN_END,
          source_file="202663020651815SRO1065 (1).pdf", page=1,
          note="no effective-date clause printed; date line used. Owner reading (owner_tasks T1): date line 30 June, 2026, no start or end wording printed. Para 2 makes it 'in addition to' 1064(I)/2026, which takes effect 1 Jul 2026, so 30 Jun 2026 itself is a one-day oddity (1152 still in force that day). 30% RD on commercial used vehicles. Rules loaded into rd_rules (rule_group 1065(I)/2026)."),
+    dict(sro_number="1640(I)/2019", instrument_kind="CD", sro_date="2019-12-31",
+         supersedes="659(I)/2007", validity_basis="clause",
+         valid_from="2020-01-01", valid_to=OPEN_END,
+         source_file="2020111213219376SRO1640(I)2019dated31.12.2019.pdf", page=1,
+         note="China-Pakistan FTA Phase II: 'with effect from the first day of January, 2020' (page 1, AI reading of the scan). No end date printed. "
+              "Amendments to this SRO are not in data/raw (OQ-A8-1), so the SRO is read as issued. Rates per calendar year are in fta_rules."),
 ]
 # superseded_by is derived from `supersedes` at load time.
 
@@ -358,6 +364,9 @@ TABLE_COLUMNS = {
                              ["sub_ref", "scope", "title", "group_context", "description", "description2", "sub_items_text",
                               "code_raw", "conditions", "part_conditions_ref", "except_codes", "unparsed_except_text",
                               "rate_raw", "rate_pcts", "rate_fraction_pct", "rate_note", "issues", "extraction_method", "status"]),
+    "fta_rules": (["row_id", "sr_no", "year_no", "calendar_year", "column_date", "code_norm", "match_level", "rule_group", "rate_kind", "rate_pct"],
+                  ["instrument", "partner", "description_ocr", "category", "pattern_base_rate", "cells_read", "cells_agree", "rate_source",
+                   "condition_text", "issues", "except_codes", "unparsed_except_text", "rate_raw", "status"]),
 }
 FACT = ["valid_from", "valid_to", "source_file", "page"]
 
@@ -401,7 +410,8 @@ def load_table_file(conn: sqlite3.Connection, table: str, path: Path) -> int:
                     "unparsed_except_text", "importer_status", "hs_edition", "table_json",
                     "sub", "heading_raw", "issues", "sub_ref", "scope", "title", "group_context", "description",
                     "description2", "sub_items_text", "code_raw", "conditions", "part_conditions_ref", "rate_raw",
-                    "rate_pcts", "rate_note", "extraction_method"))}
+                    "rate_pcts", "rate_note", "extraction_method", "instrument", "partner", "description_ocr", "category", "rate_source",
+                    "condition_text"))}
             cols = list(vals)
             cur.execute(f"INSERT INTO {table} ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
                         [vals[c] for c in cols])

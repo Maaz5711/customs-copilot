@@ -53,7 +53,7 @@ def test_agent_calls_the_hint_step_once_and_still_validates_the_final_code(db):
                    "hint_headings": {"headings": ["8471", "8473"]},
                    "classify": classify(cand("8471.3010", 0.9), cand("9999.9999", 0.05)), "verify": verify()})
     agent = CustomsAgent(llm, retriever=StubRetriever(), notes_loader=no_notes, tools=RecordingTools(db), cfg=Config(use_hints=True))
-    turn = agent.ask("slim travel computer, value PKR 1,000,000, registered importer, commercial importer", as_of_date=D15)
+    turn = agent.ask("slim travel computer, value PKR 1,000,000, registered importer, commercial importer, filer", as_of_date=D15)
     assert llm.count("hint_headings") == 1
     assert turn.state["hint_headings"] == ["8471", "8473"]
     # no word of the description matches a laptop line in the stub search; the 8471 lines came only from the hinted heading
@@ -67,7 +67,7 @@ def test_hint_answer_that_is_not_json_object_only_means_plain_search(db):
                    "hint_headings": lambda p, n: ["6109"],
                    "classify": classify(cand("6109.1000", 0.92)), "verify": verify()})
     agent = CustomsAgent(llm, retriever=StubRetriever(), notes_loader=no_notes, tools=RecordingTools(db), cfg=Config(use_hints=True))
-    turn = agent.ask("men's cotton T-shirts, value PKR 1,000,000, registered importer, commercial importer", as_of_date=D15)
+    turn = agent.ask("men's cotton T-shirts, value PKR 1,000,000, registered importer, commercial importer, filer", as_of_date=D15)
     assert turn.final["status"] == "answer" and turn.state["hint_headings"] == []
 
 
@@ -75,5 +75,5 @@ def test_hints_can_be_switched_off(db):
     llm = FakeLLM({"understand": understand(goods_description="men's cotton T-shirts", value_text="PKR 1,000,000", **IMPORTER_FULL),
                    "classify": classify(cand("6109.1000", 0.92)), "verify": verify()})
     agent = CustomsAgent(llm, retriever=StubRetriever(), notes_loader=no_notes, tools=RecordingTools(db), cfg=Config(use_hints=False))
-    turn = agent.ask("men's cotton T-shirts, value PKR 1,000,000, registered importer, commercial importer", as_of_date=D15)
+    turn = agent.ask("men's cotton T-shirts, value PKR 1,000,000, registered importer, commercial importer, filer", as_of_date=D15)
     assert llm.count("hint_headings") == 0 and turn.final["status"] == "answer"
