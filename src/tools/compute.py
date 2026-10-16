@@ -31,9 +31,9 @@ ORDER = [
     "V_ST = V + CD + RD + ACD + FED + SED  (Sales Tax Act s.2(46)(d)); Third Schedule goods: retail price (s.3(2)(a))",
     "ST  = sales tax rate x V_ST (exemption > Eighth Schedule > SRO 297 Table-I > standard 18%; Sales Tax Act s.3)",
     "VAT = 3% value addition tax at import x V_ST (Sales Tax Act s.7A(2), Twelfth Schedule), unless an exclusion applies",
-    "V_IT = V + CD + RD + ACD + FED + SED + ST + VAT; Third Schedule goods: retail price + ST (ITO s.148(9))",
+    "V_IT = V + CD + RD + ACD + FED + SED + ST + VAT (+ further tax for unregistered importers at the 18% rate); Third Schedule goods: retail price + ST (ITO s.148(9))",
     "IT  = Part II rate for the Twelfth Schedule class x V_IT (ITO s.148, First Schedule Part II)",
-    "Total = CD + RD + ACD + FED + SED + ST + VAT + IT  (further tax for unregistered importers is shown separately, OPEN-4)",
+    "Total = CD + RD + ACD + FED + SED + ST + VAT + IT  (+ further tax 4% for unregistered importers at the 18% sales-tax rate; at other rates it is shown separately, OPEN-4)",
 ]
 
 ASSUME_TEXT = {
@@ -512,12 +512,20 @@ def _compute_core(code, assessable_value_pkr, as_of_date, importer=None, quantit
                   "V + CD + RD + ACD + FED + SED", V_ST, vat_amt, _cite("sales_tax_rules", r, "ST"), r, assumptions=("OPEN10", "VATFACTS"))
     # further tax (unregistered) - shown, not in total
     ft = group_rows(conn, "sales_tax_rules", "ST-ACT-S3-1A", d)
+    fur_amt = None
     if reg == "unregistered" and ft and st_decision and st_decision[0] == "percent" and V_ST is not None:
         r = ft[0]
         amt = R(V_ST * _pct(r) / HUNDRED)
-        _line(bill, "FURTHER_TAX", "Further tax, unregistered person (s.3(1A)) - NOT in total", {"kind": "percent", "pct": fmt(_pct(r))},
-              "V + CD + RD + ACD + FED + SED", V_ST, amt, _cite("sales_tax_rules", r, "ST"), r, assumptions=("OPEN4",), included=False,
-              note="The Act text puts this on supplies to unregistered persons; collection at import is unconfirmed (OPEN-4).")
+        # Evidence (importer GD extract, Chapter 85, Feb 2026, docs/gd_findings.md): on lines taxed at the standard 18%, Customs collected an extra
+        # sales-tax amount of 7% of V_ST (the 3% value addition tax plus this 4% further tax) and put it into the income-tax base. So at the standard rate it is
+        # added to the total. At other sales-tax rates (for example 25%) the extra amount was larger (about 9.8%) and is not understood: shown, not added.
+        std_rate = st_decision[1] == Decimal(18)
+        _line(bill, "FURTHER_TAX", "Further tax, unregistered person (s.3(1A))" + ("" if std_rate else " - NOT in total"), {"kind": "percent", "pct": fmt(_pct(r))},
+              "V + CD + RD + ACD + FED + SED", V_ST, amt, _cite("sales_tax_rules", r, "ST"), r, assumptions=("OPEN4",), included=std_rate,
+              note=("Collected at import from unregistered importers (seen on real assessed Goods Declarations at the 18% rate); part of the income-tax base."
+                    if std_rate else "At this sales-tax rate real assessments showed a larger extra amount that is not understood (OPEN-4); shown, not added."))
+        if std_rate:
+            fur_amt = amt
     bill.notes.append("Extra tax (s.3(5)) is a power clause with no rate in the Act; nothing is added.")
 
     # ---------------- income tax
@@ -562,7 +570,7 @@ def _compute_core(code, assessable_value_pkr, as_of_date, importer=None, quantit
                     base_it = None if rp is None else D(rp) + st_amt
                     base_it_label = "retail price + sales tax (ITO s.148(9)(a))"
                 else:
-                    base_it = V + cd_amt + rd_total + acd_amt + fed_amt + sed_amt + st_amt + (vat_amt or Decimal(0))
+                    base_it = V + cd_amt + rd_total + acd_amt + fed_amt + sed_amt + st_amt + (vat_amt or Decimal(0)) + (fur_amt or Decimal(0))
                     base_it_label = "V + CD + RD + ACD + FED + SED + ST + VAT (ITO First Schedule Part II col. 3, s.148(9)(b))"
                 atl = facts.ib("active_taxpayer")
                 if base_it is not None and atl is None:
@@ -624,7 +632,7 @@ def _compute_core(code, assessable_value_pkr, as_of_date, importer=None, quantit
                 tot["customs_duties"] += a
             elif ln["tax"] in ("FED", "SED"):
                 tot["federal_excise_duty"] += a
-            elif ln["tax"] in ("ST", "VAT"):
+            elif ln["tax"] in ("ST", "VAT", "FURTHER_TAX"):
                 tot["sales_tax"] += a
             elif ln["tax"] == "IT":
                 tot["income_tax"] += a

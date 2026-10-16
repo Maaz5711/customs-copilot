@@ -23,6 +23,7 @@ from src.tools import compute_duty
 from .gd_data import code8, load, num
 
 TOL = Decimal(2)
+REL = Decimal("0.004")          # Customs rounds each component; allow 0.4% on top of 2 rupees
 TAXES = (("CD", "CD"), ("RD", "RD"), ("ACD", "ADD. CD"), ("ST", "ST"), ("VAT", "ADD. ST"), ("IT", "IT"))
 
 
@@ -34,7 +35,9 @@ def line_inputs(r: dict) -> tuple[dict, dict]:
     base_it = iv + sum(num(r[k]) for k in ("CD", "ST", "ADD. ST", "RD", "ADD. CD", "FED"))
     rate = 100 * num(r["IT"]) / base_it if base_it else 0
     comm = (3.0 <= rate <= 4.2) or rate >= 5.75 or rate < 1.5
-    imp = {"registration_status": "registered", "commercial_importer": comm, "active_taxpayer": True, "manufacturer_in_house_use": num(r["ADD. ST"]) <= 0}
+    unreg = num(r["GST"]) > 0 and num(r["ADD. ST"]) <= 0          # the extra sales-tax amount sits in the 'GST' column instead of 'ADD. ST'
+    imp = {"registration_status": "unregistered" if unreg else "registered", "commercial_importer": comm, "active_taxpayer": True,
+           "manufacturer_in_house_use": (num(r["ADD. ST"]) <= 0) and not unreg}
     return imp, {"plant_machinery_for_manufacturing": False, "_it_rate": round(rate, 2)}
 
 
@@ -62,18 +65,19 @@ def run(n: int = 1500, seed: int = 11) -> list[dict]:
             res = compute_duty(r["code8"], str(int(num(r["IV"]))), r["date"], importer=imp, goods=goods)
         except Exception as e:
             res = {"status": f"error:{type(e).__name__}"}
-        row = {"anon_id": r["anon_id"], "code": r["code8"], "date": r["date"], "iv": int(num(r["IV"])), "comm": imp["commercial_importer"], "mfr": imp["manufacturer_in_house_use"], "it_rate_actual": extra["_it_rate"],
+        row = {"anon_id": r["anon_id"], "code": r["code8"], "date": r["date"], "iv": int(num(r["IV"])), "comm": imp["commercial_importer"], "mfr": imp["manufacturer_in_house_use"], "unreg": imp["registration_status"] == "unregistered", "it_rate_actual": extra["_it_rate"],
                "tag": concession_tag(r), "our_status": res["status"], "needs": ";".join(m["field"] for m in res.get("missing_inputs", [])) if res["status"] == "needs_input" else ""}
         lines = {}
         if res["status"] == "computed":
-            for ln in res["lines"] + res.get("optional_lines_not_in_total", []):
-                lines.setdefault(ln["tax"], Decimal(ln["amount_pkr"]))
+            for ln in res["lines"]:
+                key = "VAT" if ln["tax"] in ("VAT", "FURTHER_TAX") else ln["tax"]      # Customs books the 3% tax and the 4% further tax together
+                lines[key] = lines.get(key, Decimal(0)) + Decimal(ln["amount_pkr"])
         diffs = []
         for tax, colname in TAXES:
-            actual = Decimal(str(num(r[colname])))
+            actual = Decimal(str(num(r[colname]) + (num(r["GST"]) if tax == "VAT" else 0)))
             ours = lines.get(tax, Decimal(0)) if res["status"] == "computed" else None
             row[f"act_{tax}"], row[f"our_{tax}"] = int(actual), (None if ours is None else int(ours))
-            if ours is not None and abs(actual - ours) > TOL:
+            if ours is not None and abs(actual - ours) > max(TOL, REL * actual):
                 diffs.append(tax)
         row["diffs"] = ",".join(diffs)
         out.append(row)
