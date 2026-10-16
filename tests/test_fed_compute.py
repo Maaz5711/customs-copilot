@@ -14,7 +14,7 @@ import pytest
 from src.tools import compute_duty, get_applicable_sros
 
 PROC = Path("data/processed")
-IMP = {"registration_status": "registered", "commercial_importer": True, "licensed_oil_marketing_company": False}
+IMP = {"registration_status": "registered", "commercial_importer": True, "licensed_oil_marketing_company": False, "active_taxpayer": True}
 NEW = {"vehicle_form": "CBU", "used_vehicle_commercial_import_ipo": False}
 
 

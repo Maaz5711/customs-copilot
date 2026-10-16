@@ -39,6 +39,7 @@ SPECS: dict[str, dict] = {
     "quantity": {"type": "quantity"},
     "importer.registration_status": {"type": "registration"},
     "importer.commercial_importer": {"type": "bool"},
+    "importer.active_taxpayer": {"type": "bool"},
     "importer.manufacturer_in_house_use": {"type": "bool"},
     "importer.licensed_oil_marketing_company": {"type": "bool"},
     "importer.registered_service_provider_in_house_use": {"type": "bool"},
@@ -52,6 +53,9 @@ SPECS: dict[str, dict] = {
     "goods.fan_not_meps_compliant": {"type": "bool"},
     "goods.running_time_minutes": {"type": "number", "gt": 0, "what": "running time in minutes"},
     "goods.age_years": {"type": "number", "min": 0, "max": 100, "what": "age in years"},
+    "goods.origin_country": {"type": "text"},
+    "goods.has_certificate_of_origin": {"type": "bool"},
+    "goods.claim_china_fta": {"type": "bool"},
 }
 
 
@@ -150,10 +154,13 @@ def tool_args(inputs: dict) -> dict:
     """compute_duty keyword arguments from `inputs` (only values that are set)."""
     importer = {k: v for k, v in (inputs.get("importer") or {}).items() if v is not None}
     goods = {k: v for k, v in (inputs.get("goods") or {}).items() if v is not None}
+    # Fifth Schedule claims: the importer said "yes, I meet the conditions of this entry" (field claim.<rule_id>)
+    claimed = sorted(k for k, v in (inputs.get("claim") or {}).items() if v is True)
     return {
         "assessable_value_pkr": inputs.get("assessable_value_pkr"),
         "importer": importer or None,
         "goods": goods or None,
         "quantity": inputs.get("quantity"),
         "quantity_unit": inputs.get("quantity_unit"),
+        "claimed_rules": claimed or None,
     }

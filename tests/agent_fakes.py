@@ -120,4 +120,5 @@ def verify(fits=True, conf=0.9, notes=(), problems=(), hint=None, unsupported=()
             "problems": list(problems), "search_hint": hint}
 
 
-IMPORTER_FULL = {"registration_status": "registered", "registration_quote": "registered importer", "commercial_importer": True, "commercial_quote": "commercial importer"}
+IMPORTER_FULL = {"registration_status": "registered", "registration_quote": "registered importer", "commercial_importer": True, "commercial_quote": "commercial importer",
+                "active_taxpayer": True, "active_taxpayer_quote": "filer"}

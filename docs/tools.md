@@ -11,7 +11,7 @@ from src.tools import lookup_code, get_applicable_sros, compute_duty
 lookup_code("8471.3010", "2026-07-15")
 get_applicable_sros("6109.1000", "2026-06-30")
 compute_duty("9506.9911", 500000, "2026-07-15",
-             importer={"registration_status": "registered", "commercial_importer": True, "manufacturer_in_house_use": False})
+             importer={"registration_status": "registered", "commercial_importer": True, "active_taxpayer": True, "manufacturer_in_house_use": False})
 ```
 MCP (stdio): `.venv/Scripts/python -m src.tools.mcp_server` (tool names `lookup_code`, `get_applicable_sros`, `compute_duty`; same arguments, JSON in and out).
 
@@ -31,7 +31,7 @@ Blocks `rd`, `acd`, `sales_tax`, `income_tax`, `concessions`, each with:
   `shadowed_by_more_specific_row_in_same_rule_group`, `slab_mismatch: ...` (ACD, tariff-CD slab test), SRO 297 Table-II (supply of locally made vehicles, not an import rule),
   `local_supply_wording_probably_not_an_import_rule` (rows the A3 reader marked). Reasons about the code come first, date-only exclusions last (list capped at 60; `excluded_total` has the real count).
 * `notifications`: the RD/ACD/ST/IT notifications in force on the date and those not in force (with `sro_status` and `superseded_by`).
-* extras: `acd.tariff_cd_slab`, `income_tax.twelfth_schedule_class` (Part I/II/III), `sales_tax.general_rules_by_group` (the 3% value addition tax row), `concessions` (none are stored; sugar and Early Harvest SROs name no PCT code).
+* extras: `acd.tariff_cd_slab`, `income_tax.twelfth_schedule_class` (Part I/II/III), `sales_tax.general_rules_by_group` (the 3% value addition tax row), `concessions` (Fifth Schedule and China FTA options for the code on the date, see section "Customs-duty concessions" below; sugar and Early Harvest SROs name no PCT code).
 
 ## `compute_duty(code, assessable_value_pkr, as_of_date, importer, quantity, quantity_unit, goods, claimed_rules, rounding)`
 
@@ -40,6 +40,7 @@ Blocks `rd`, `acd`, `sales_tax`, `income_tax`, `concessions`, each with:
 |---|---|---|
 | `importer.registration_status` `registered`/`unregistered` | always | Sales Tax Act s.3(1A) (further tax) |
 | `importer.commercial_importer` (bool) | income-tax class Part II or III | First Schedule Part II: 2% / 3.5%, 5.5% / 6% |
+| `importer.active_taxpayer` (bool) | income tax at import | ITO Tenth Schedule rule 1: not on the Active Taxpayers' List = rate doubled (6% becomes 12%). Always asked, never assumed |
 | `importer.manufacturer_in_house_use` (bool) | Chapter 84/85 goods (and always optional: true = raw material in-house) | Sales Tax Act Twelfth Schedule cond. (2)(x), (2)(i) |
 | `importer.licensed_oil_marketing_company` (bool) | Chapter 27 | Twelfth Schedule cond. (2)(ii) |
 | `importer.registered_service_provider_in_house_use`, `importer.income_tax_category` | optional | cond. (2)(iii); First Schedule Part II provisos (`sro_1125_manufacturer`, `pharma_drap_certified`, `ckd_ev_kit`) |
@@ -99,7 +100,7 @@ CKD vehicle rows of the ACD SROs (OQ-A3-1); Sixth Schedule rows with unconfirmed
   * Rows mapped by description from 'Respective heading(s)' carry `fed_row_mapped_by_description_not_owner_verified` and assumption `FED_MAPPED`; serials left unmapped are never matched but raise flag `fed_unmapped_serial_possible`. Third Schedule exemptions are listed in `possible_rules_not_applied`, never applied.
   * Assumptions: `FED` (scope), `FED_DATE` (OQ-A6-6), `FED_MAPPED`, `FED_RETAIL`, `SED_BASE` (the line note shows the amount if the base also held the Table I FED).
   * `get_applicable_sros` has a `fed` block: `applicable`, `possible_exemptions`, `excluded` (local-only rows, other fiscal year, shadowed rows, each with `why_not_applied`) and `notes`.
-* Customs duty exemptions and concessions (Fifth Schedule, FTA/PTA, other SROs) are not in the store; only the tariff CD is applied.
+* Customs-duty concessions in the store: Fifth Schedule (FY2025-26 file and FY2026-27 file) and China FTA Phase II (SRO 1640(I)/2019, calendar years 2025-2027). They are options, never applied unless claimed (below). Other FTAs/PTAs and other concession SROs are not in the store; the tariff CD is applied.
 * Rows that name goods only in words (no PCT code) cannot be matched by code: Third/Sixth/Eighth/Fifth Schedule descriptive entries, Twelfth Schedule descriptive entries (class falls to Part III by residual), Ninth Schedule mobile table.
 * Mobile phones (8517.13xx/8517.14xx): CD and RD tiers are computed; sales tax and income tax return `cannot_compute` (Ninth Schedule Table-II and the First Schedule mobile table are not matchable to tariff lines; the IT table names 8517.1219/8517.1211 which are not tariff lines).
 * Eighth Schedule rates printed as a formula (for example "Rs. 700 per metric tonne or 18%, whichever is higher") return `cannot_compute`.
@@ -110,3 +111,12 @@ CKD vehicle rows of the ACD SROs (OQ-A3-1); Sixth Schedule rows with unconfirmed
 * Section 53A ITO, minimum values under s.148(6A), valuation rulings: not applied. Tools never convert units (Kg to MT).
 * Dates outside 2025-07-01 .. 2027-06-30 are refused (the tariff stops there).
 * The VAT base (OPEN-10), the RD/ACD-in-base reading (OPEN-2) and the precedence between sales-tax sources (OPEN-3) are readings, not text of the law; see `docs/owner_questions.md` OQ-B3-1 to OQ-B3-7.
+
+## Customs-duty concessions (A7 Fifth Schedule, A8 China FTA Phase II): `src/tools/concessions.py`
+Plain idea: the normal bill is always shown. Where the code has a concession row, the tool also shows what the bill would be **with** it and which conditions the importer must meet. It applies the concession only when asked.
+* **New inputs.** `goods.origin_country` (`CN`/`China` or another country), `goods.has_certificate_of_origin` (true/false: Form E, issued in China), `goods.claim_china_fta` (true = use the China FTA rate; applied only if origin is China and the certificate is true), and `claimed_rules` with a rule id from `concessions.fifth_schedule.options[].rule_id` (for example `fifth_schedule_rules:9`). One customs-duty concession only; two claimed = `needs_input`.
+* **New output `concessions`**: `fifth_schedule {status: checked | not_in_store_for_date, options[], not_offered[], possible_by_description[], notes}`, `china_fta {options[], origin, certificate}`, `questions[]` (what the agent should ask: origin, Form E, Fifth Schedule entitlement), `applied[]`, `bill_without_concession` (when one is applied), `notes`. Each option: `rule_id`, `clause` (Part, Table, S.No, item), `description`, `listed_rate` (as printed), `effective_cd_pct`, `tariff_cd_pct`, `how` (the slab or "lower of" rule used), `conditions_the_system_cannot_check`, `acd_not_levied` + `acd_note`, `status`, `flags`, page and source file, `bill_if_applied {totals, lines, difference_vs_normal_bill}` (the first 8 options).
+* **Rates.** Fifth Schedule: `docs/duty_formula.md` section 8 (single rate; slab rule for lists such as "0%,3%,5%"; "50% of the prevailing rate"). China FTA: lower of the normal CD and the SRO rate of the calendar year of the import date.
+* **What changes in the bill.** Only the CD line (label "Customs duty under concession: ...", note with the normal duty). ACD becomes "not levied" for Fifth Schedule goods except the serials excluded by SRO 1063/1151 para 3(iii). RD is unchanged. Sales tax, value addition tax and income tax bases use the CD actually paid.
+* **Flags and assumptions.** `concession_applied_conditions_unchecked`, assumptions `CONCESSION_CONDITIONS`, `FIFTH_ACD`, `FTA_BASE`. Rows read by OCR carry `reading` (`ocr_fitted_to_taper_pattern` = AI reading of the scan fitted to the printed straight-line pattern) and `needs_review` when a check failed.
+* **Limits.** Fifth Schedule entries printed "Respective Headings" name goods only in words: they are listed under `possible_by_description` for chapters 84, 85 and 90, never matched by code. EV/hybrid parts rows with text rates ("1% (notwithstanding ...)") are shown with `rate_not_computable`. Part VIII (border markets) is never offered. The FY2025-26 amendments of SRO 1640(I)/2019 are not in `data/raw` (OQ-A8-1); codes of the 2019 SRO that are not lines of the 2025-26/2026-27 tariffs are never matched.

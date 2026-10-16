@@ -32,6 +32,8 @@ UNDERSTAND_FORMAT = """Return a JSON object with exactly these keys:
   "registration_status": "registered" or "unregistered" or null (Sales Tax Act registration of the importer),
   "registration_quote": "exact words, or null",
   "commercial_importer": true or false or null (imports to sell in the same condition),
+  "active_taxpayer": true or false or null (true if the importer says it is a filer / on FBR's Active Taxpayers List (ATL); false if it says non-filer or not on the ATL),
+  "active_taxpayer_quote": "exact words, or null",
   "commercial_quote": "exact words, or null",
   "manufacturer_in_house_use": true or false or null (a manufacturer importing for its own production),
   "manufacturer_quote": "exact words, or null",

@@ -60,6 +60,57 @@ def _line_block(i: int, ln: dict) -> list[str]:
     return out
 
 
+def concession_section(duty: dict) -> list[str]:
+    """Customs-duty concessions: what the tool found, both bills, the conditions nobody has checked. Text only; every number is from the tool."""
+    con = (duty or {}).get("concessions")
+    if not con:
+        return []
+    out: list[str] = []
+    base_total = None
+    applied = con.get("applied") or []
+    if applied:
+        a = applied[0]
+        wo = con.get("bill_without_concession") or {}
+        out.append(f"CUSTOMS-DUTY CONCESSION APPLIED (because you claimed it): {a['clause']} - {a.get('description', '')[:160]}")
+        out.append(f"  Customs duty {a['effective_cd_pct']}% instead of the normal {a.get('tariff_cd_pct')}%. {a.get('how', '')}")
+        if wo.get("totals"):
+            out.append(f"  Bill WITHOUT the concession: total payable PKR {fmt_money(wo['totals']['total_payable_pkr'])}. Bill WITH it: PKR {fmt_money((duty.get('totals') or {}).get('total_payable_pkr'))} "
+                       f"(difference PKR {fmt_money((wo.get('difference_this_bill_vs_without') or {}).get('total_payable_pkr'))}).")
+        out.append("  Conditions that nobody has checked (Customs can recover the duty if they are not met):")
+        for c in a.get("conditions_the_system_cannot_check") or ["none printed with the entry"]:
+            out.append(f"    - {c}")
+        out.append(f"  Source: {a.get('instrument')}, {a.get('clause')}; {a.get('source_file')} p.{a.get('page')}; {_valid(a.get('valid_from'), a.get('valid_to'))}; status {a.get('status')}")
+        out.append("")
+        return out
+    shown = 0
+    for label, blk in (("Fifth Schedule", con.get("fifth_schedule") or {}), ("China-Pakistan FTA Phase II", con.get("china_fta") or {})):
+        for o in blk.get("options", []):
+            b = o.get("bill_if_applied") or {}
+            if not (b.get("totals") and shown < 4):
+                continue
+            if shown == 0:
+                out.append("CUSTOMS-DUTY CONCESSIONS THAT MIGHT APPLY (NOT applied: they depend on conditions only you can confirm). Bill above = without any concession.")
+            shown += 1
+            diff = (b.get("difference_vs_normal_bill") or {}).get("total_payable_pkr")
+            out.append(f"  {shown}. {label}: {o['clause']} - {o.get('description', '')[:140]}")
+            out.append(f"     Printed rate {o['listed_rate']} -> customs duty {o['effective_cd_pct']}% instead of {o.get('tariff_cd_pct')}%. Bill WITH it: total PKR {fmt_money(b['totals']['total_payable_pkr'])} (difference PKR {fmt_money(diff)}).")
+            conds = o.get("conditions_the_system_cannot_check") or []
+            if conds:
+                out.append("     Conditions I cannot check: " + " | ".join(c[:300] for c in conds))
+            out.append(f"     Source: {o.get('instrument')}; {o.get('source_file')} p.{o.get('page')}; {_valid(o.get('valid_from'), o.get('valid_to'))}; status {o.get('status')}"
+                       + (f"; flags {', '.join(o['flags'])}" if o.get("flags") else ""))
+    fifth = con.get("fifth_schedule") or {}
+    if fifth.get("possible_by_description"):
+        out.append(f"  Fifth Schedule Part I also has {len(fifth['possible_by_description'])} entries that name goods only in words ('Respective Headings'): "
+                   "I cannot match them to a code. If your goods fit one of them, ask your clearing agent (see the tool output).")
+    if not shown:
+        return []
+    for n in (con.get("notes") or []) + (fifth.get("notes") or [])[:1]:
+        out.append(f"  Note: {n}")
+    out.append("")
+    return out
+
+
 def _status_counts(lines: list[dict]) -> dict:
     c: dict[str, int] = {}
     for ln in lines:
@@ -107,8 +158,8 @@ def build_citations(state: dict, duty: dict | None, lookup: dict | None) -> list
         out.append({"kind": "tariff", "code": lookup["code"], "fy": lookup.get("fy"), "source_file": lookup.get("source_file"),
                     "page": lookup.get("page"), "valid_from": lookup.get("valid_from"), "valid_to": lookup.get("valid_to")})
     for ln in (duty or {}).get("lines", []) + (duty or {}).get("optional_lines_not_in_total", []):
-        if ln.get("tax") == "CD":
-            continue            # same tariff row as above
+        if ln.get("tax") == "CD" and not ln.get("concession"):
+            continue            # same tariff row as above (a CD line under a concession cites the concession row)
         out.append({"kind": ln["tax"], "instrument": ln.get("instrument"), "clause": ln.get("clause"), "source_file": ln.get("source_file"),
                     "page": ln.get("page"), "valid_from": ln.get("valid_from"), "valid_to": ln.get("valid_to"), "status": ln.get("status"),
                     "rule_id": ln.get("rule_id")})
@@ -194,6 +245,7 @@ def render_answer(state: dict, verification: dict | None = None) -> dict:
             if c.get("owner_question"):
                 lines_out.append(f"      Open question: {c['owner_question']}")
         lines_out.append(f"  Sum of the lines above that could be computed (NOT the amount payable): PKR {fmt_money(duty.get('partial_total_of_computed_lines_pkr'))}")
+    lines_out += concession_section(duty)
     opt = duty.get("optional_lines_not_in_total", [])
     if opt:
         lines_out.append("  NOT in the total (the law's text leaves this open):")

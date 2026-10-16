@@ -30,7 +30,7 @@ PROC = Path("data/processed")
 pytestmark = pytest.mark.skipif(not (PROC / "a3_acd_rules.csv").exists(), reason="processed data not present")
 
 D = Decimal
-IMP = {"registration_status": "registered", "commercial_importer": True, "manufacturer_in_house_use": False}
+IMP = {"registration_status": "registered", "commercial_importer": True, "manufacturer_in_house_use": False, "active_taxpayer": True}
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -191,7 +191,7 @@ def test_hand_7_sales_tax_reduced_rate_laptop():
     st = [ln for ln in res["lines"] if ln["tax"] == "ST"][0]
     assert st["page"] == 210 and "Eighth Schedule" in st["instrument"]
     # chapter 84: the VAT exclusion for manufacturers' plant and machinery needs an answer
-    r2 = compute_duty("8471.3010", 1000000, "2026-07-15", importer={"registration_status": "registered", "commercial_importer": True})
+    r2 = compute_duty("8471.3010", 1000000, "2026-07-15", importer={"registration_status": "registered", "commercial_importer": True, "active_taxpayer": True})
     assert r2["status"] == "needs_input"
     assert [m["field"] for m in r2["missing_inputs"]] == ["importer.manufacturer_in_house_use"]
 
@@ -229,10 +229,10 @@ def test_hand_9_income_tax_classes_I_II_III():
     res = compute_duty("6005.4400", 1000000, "2026-07-15", importer={**IMP, "commercial_importer": False})
     check(res, {"CD": "100000.00", "RD": "0.00", "ACD": "0.00", "ST": "198000.00", "VAT": "33000.00", "IT": "73205.00"}, "404205.00")
     # Part I does not depend on commercial status: not asked
-    r = compute_duty("8445.3000", 1000000, "2026-07-15", importer={"registration_status": "registered", "manufacturer_in_house_use": False})
+    r = compute_duty("8445.3000", 1000000, "2026-07-15", importer={"registration_status": "registered", "manufacturer_in_house_use": False, "active_taxpayer": True})
     assert r["status"] == "computed"
     # Part II/III need it
-    r = compute_duty("6005.4400", 1000000, "2026-07-15", importer={"registration_status": "registered"})
+    r = compute_duty("6005.4400", 1000000, "2026-07-15", importer={"registration_status": "registered", "active_taxpayer": True})
     assert r["status"] == "needs_input" and r["missing_inputs"][0]["field"] == "importer.commercial_importer"
 
 
@@ -266,7 +266,7 @@ def test_every_line_has_a_citation_and_money_is_strings():
 
 
 def test_missing_inputs_are_a_list_not_a_number():
-    res = compute_duty("8703.2113", 1000000, "2026-07-15", importer={"registration_status": "registered", "commercial_importer": True})
+    res = compute_duty("8703.2113", 1000000, "2026-07-15", importer={"registration_status": "registered", "commercial_importer": True, "active_taxpayer": True})
     assert res["status"] == "needs_input" and res["totals"] is None
     assert {m["field"] for m in res["missing_inputs"]} == {"goods.used_vehicle_commercial_import_ipo", "goods.vehicle_form", "goods.engine_cc"}
     # no importer at all
@@ -397,3 +397,31 @@ def test_mcp_server_lists_and_calls_the_three_tools(store):
     assert names == {"lookup_code", "get_applicable_sros", "compute_duty"}
     assert bill["totals"]["total_payable_pkr"] == "410860.00"
     assert look["status"] == "found" and sro["rd"]["applicable"][0]["instrument"] == "1064(I)/2026"
+
+
+# ===================================================================== non-filer income tax (ITO Tenth Schedule rule 1)
+def test_hand_11_non_filer_income_tax_is_doubled_and_cited():
+    # 6109.1000, V = 1,000,000, 2026-07-15, same as hand case 10 (after): V_IT = 1,573,000.
+    # Filer (on the Active Taxpayers' List): IT 6% = 94,380 (First Schedule Part II: commercial importer, Twelfth Schedule Part III).
+    # Not on the list: ITO Tenth Schedule rule 1 raises the collected rate by 100% -> 12% x 1,573,000 = 188,760. FBR WHT rate card TY2027 prints 6% / 12%.
+    # Total: 667,380 - 94,380 + 188,760 = 761,760.
+    non_filer = compute_duty("6109.1000", 1000000, "2026-07-15", importer={**IMP, "active_taxpayer": False})
+    check(non_filer, {"CD": "200000.00", "RD": "80000.00", "ACD": "20000.00", "ST": "234000.00", "VAT": "39000.00", "IT": "188760.00"}, "761760.00")
+    it = next(ln for ln in non_filer["lines"] if ln["tax"] == "IT")
+    assert it["rate"]["pct"] == "12" and "NOT on the Active Taxpayers List" in it["note"]
+    assert it["atl_rule"]["page"] == 798 and "Tenth Schedule rule 1" in it["atl_rule"]["clause"]
+    filer = compute_duty("6109.1000", 1000000, "2026-07-15", importer={**IMP, "active_taxpayer": True})
+    assert amounts(filer)["IT"] == "94380.00" and "atl_rule" not in next(ln for ln in filer["lines"] if ln["tax"] == "IT")
+
+
+def test_filer_status_is_asked_never_assumed():
+    imp = {k: v for k, v in IMP.items() if k != "active_taxpayer"}
+    r = compute_duty("6109.1000", 1000000, "2026-07-15", importer=imp)
+    assert r["status"] == "needs_input" and "importer.active_taxpayer" in {m["field"] for m in r["missing_inputs"]}
+    assert r.get("totals") is None
+
+
+def test_non_filer_rule_cites_the_file_valid_on_the_date():
+    r = compute_duty("6109.1000", 1000000, "2025-12-01", importer={**IMP, "active_taxpayer": False})
+    it = next(ln for ln in r["lines"] if ln["tax"] == "IT")
+    assert it["atl_rule"]["page"] == 780 and "20.02.2026" in it["atl_rule"]["source_file"]

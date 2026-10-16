@@ -53,6 +53,7 @@ class AgentState(TypedDict, total=False):
     pending_answer: Any
     clarify_kind: str | None
     clarify_rounds: int
+    concession_asked: list
     reask: dict
     unknown_fields: list
     unresolved: list
@@ -216,6 +217,8 @@ def facts_from_understand(u: dict, message: str, deps: Deps) -> tuple[dict, dict
         inputs.setdefault("importer", {})["registration_status"] = u["registration_status"]
     if u["commercial_importer"] is not None and keep("commercial_importer", u["commercial_quote"]):
         inputs.setdefault("importer", {})["commercial_importer"] = u["commercial_importer"]
+    if u.get("active_taxpayer") is not None and keep("active_taxpayer", u.get("active_taxpayer_quote")):
+        inputs.setdefault("importer", {})["active_taxpayer"] = u["active_taxpayer"]
     if u["manufacturer_in_house_use"] is not None and keep("manufacturer_in_house_use", u["manufacturer_quote"]):
         inputs.setdefault("importer", {})["manufacturer_in_house_use"] = u["manufacturer_in_house_use"]
     return facts, inputs, dropped
@@ -667,6 +670,36 @@ def discover_missing(tools: ToolBox, code: str, date_iso: str, args: dict, value
     return found
 
 
+def concession_questions(duty: dict, asked: list, unknown: list) -> list:
+    """Questions about customs-duty concessions (Fifth Schedule, China FTA) taken from the tool's own `concessions` block.
+    Wording only: every rate, condition and page comes from the tool output. Each field is asked once per conversation."""
+    con = (duty or {}).get("concessions") or {}
+    out: list = []
+    for q in con.get("questions", []):
+        if q["id"] == "origin_country" and "goods.origin_country" not in asked and "goods.origin_country" not in unknown:
+            out.append(_q("goods.origin_country", "duty_input", q["question"], why=q.get("why")))
+        elif q["id"] == "certificate_of_origin" and "goods.has_certificate_of_origin" not in asked and "goods.has_certificate_of_origin" not in unknown:
+            out.append(_q("goods.has_certificate_of_origin", "duty_input", q["question"], why=q.get("why"), allowed=[True, False]))
+    fta = con.get("china_fta") or {}
+    if fta.get("origin") is True and fta.get("certificate") is True and fta.get("options") and "goods.claim_china_fta" not in asked and "goods.claim_china_fta" not in unknown:
+        o = fta["options"][0]
+        out.append(_q("goods.claim_china_fta", "duty_input",
+                      f"You said the goods are of Chinese origin and you hold a Form E. Do you want the bill calculated with the China-Pakistan FTA rate "
+                      f"({o['listed_rate']} is printed in the SRO for that year, so customs duty {o['effective_cd_pct']}% instead of {o['tariff_cd_pct']}%)? "
+                      "You must be able to show the certificate to Customs. I will show the bill with and without it.",
+                      why="SRO 1640(I)/2019 conditions: goods of Chinese origin with the certificate of origin.", allowed=[True, False]))
+    for o in (con.get("fifth_schedule") or {}).get("options", [])[:2]:
+        f = f"claim.{o['rule_id']}"
+        if f in asked or f in unknown or o.get("effective_cd_pct") is None or o["rule_id"] not in {x for q in con.get("questions", []) for x in (q.get("allowed") or []) if isinstance(x, str)}:
+            continue
+        conds = " ".join(o.get("conditions_the_system_cannot_check") or []) or "see the Fifth Schedule entry"
+        out.append(_q(f, "duty_input",
+                      f"The Fifth Schedule ({o['clause']}: {o['description'][:140]}) lists {o['listed_rate']}, which would make the customs duty {o['effective_cd_pct']}% instead of "
+                      f"{o['tariff_cd_pct']}%. Does the importer meet its conditions? Conditions (not checked by me): {conds[:600]} Answer yes or no.",
+                      why="A Fifth Schedule entry replaces the normal customs duty only if its conditions are met (Customs Act s.18(1A)).", allowed=[True, False], fld=f))
+    return out[:3]
+
+
 def make_calculate(deps: Deps):
     cfg = deps.cfg
 
@@ -699,6 +732,11 @@ def make_calculate(deps: Deps):
             return ask_or_stop(lookup, missing, unknown, rounds_left, None, "needs_input")
         if duty.get("status") not in ("computed", "cannot_compute"):
             return {"lookup": lookup, "duty": duty, "route": "verify", "trace": [f"calculate: tool status {duty.get('status')}"]}
+        asked = list(state.get("concession_asked") or [])
+        cqs = concession_questions(duty, asked, unknown) if (rounds_left and duty.get("status") == "computed") else []
+        if cqs:
+            return {"lookup": lookup, "duty": duty, "pending_questions": cqs, "clarify_kind": "duty_input", "concession_asked": asked + [q["field"] for q in cqs],
+                    "route": "clarify", "trace": [f"calculate: concessions possible -> asking {[q['field'] for q in cqs]}"]}
         rules = deps.tools.get_applicable_sros(code, date_iso)
         in_force: dict = {}
         for label, key in (("RD", "rd"), ("ACD", "acd"), ("sales tax", "sales_tax"), ("income tax", "income_tax")):

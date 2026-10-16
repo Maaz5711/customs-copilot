@@ -28,8 +28,8 @@ PROC = Path("data/processed")
 pytestmark = pytest.mark.skipif(not (PROC / "a3_acd_rules.csv").exists(), reason="processed data not present")
 
 D15 = "2026-07-15"
-TSHIRT_MSG = "men's cotton T-shirts, value PKR 1,000,000, registered importer, commercial importer"
-IMP_RC = {"registration_status": "registered", "commercial_importer": True}
+TSHIRT_MSG = "men's cotton T-shirts, value PKR 1,000,000, registered importer, commercial importer, filer"
+IMP_RC = {"registration_status": "registered", "commercial_importer": True, "active_taxpayer": True}
 
 
 @pytest.fixture(scope="module")
@@ -91,12 +91,12 @@ def test_clarify_interrupt_resume_round_trip(db):
     t2 = agent.resume(t1.thread_id, "15 July 2026")
     assert t2.final is None and t2.interrupt["kind"] == "duty_input"
     q = questions(t2)
-    assert set(q) == {"assessable_value_pkr", "importer.registration_status", "importer.commercial_importer", "importer.manufacturer_in_house_use"}
+    assert set(q) == {"assessable_value_pkr", "importer.registration_status", "importer.commercial_importer", "importer.active_taxpayer", "importer.manufacturer_in_house_use"}
     assert q["importer.registration_status"]["allowed"] == ["registered", "unregistered"] and q["importer.manufacturer_in_house_use"]["allowed"] == [True, False]
     assert t2.state.get("duty") is None                                # the probe's numbers were thrown away, not stored or shown
 
     t3 = agent.resume(t2.thread_id, {"answers": {"assessable_value_pkr": "1,000,000", "importer.registration_status": "registered",
-                                                 "importer.commercial_importer": "yes", "importer.manufacturer_in_house_use": "no"}})
+                                                 "importer.commercial_importer": "yes", "importer.active_taxpayer": "yes", "importer.manufacturer_in_house_use": "no"}})
     assert t3.interrupt is None and t3.final["status"] == "answer"
     direct = compute_duty("8471.3010", 1000000, D15, importer={**IMP_RC, "manufacturer_in_house_use": False}, db_path=db)
     assert direct["totals"]["total_payable_pkr"] == "197800.00"        # hand case 7 in tests/test_tools.py
@@ -128,7 +128,7 @@ def test_classification_questions_come_from_the_classifier_and_reach_search_and_
                    "verify": verify()})
     stub = StubRetriever()
     agent, _ = make_agent(llm, db, retriever=stub)
-    t1 = agent.ask("T-shirts, value PKR 1,000,000, registered importer, commercial importer", as_of_date=D15)
+    t1 = agent.ask("T-shirts, value PKR 1,000,000, registered importer, commercial importer, filer", as_of_date=D15)
     assert t1.interrupt["kind"] == "classification" and "cotton" in t1.interrupt["questions"][0]["question"]
     t2 = agent.resume(t1.thread_id, "100% cotton")
     assert t2.final["status"] == "answer" and t2.final["code"] == "6109.1000"
@@ -324,12 +324,12 @@ def test_missing_inputs_trigger_clarify_instead_of_a_number(db):
     assert t1.final is None and t1.interrupt["kind"] == "duty_input"
     q = questions(t1)
     # all stages of the rules are asked in ONE round (the income-tax question only shows up after the vehicle ones are answered)
-    assert set(q) == {"importer.registration_status", "importer.commercial_importer", "goods.vehicle_form", "goods.engine_cc", "goods.used_vehicle_commercial_import_ipo"}
+    assert set(q) == {"importer.registration_status", "importer.commercial_importer", "importer.active_taxpayer", "goods.vehicle_form", "goods.engine_cc", "goods.used_vehicle_commercial_import_ipo"}
     assert "assessable_value_pkr" not in q                                      # the value was given and is not asked again
     assert q["goods.vehicle_form"]["allowed"] == ["CKD", "CBU"] and "Engine capacity" in q["goods.engine_cc"]["question"]
     assert t1.state.get("duty") is None and t1.state.get("final") is None       # no number of any kind yet
     assert not re.search(r"\d+\.\d{2}", json.dumps(t1.interrupt))
-    t2 = agent.resume(t1.thread_id, {"answers": {"importer.registration_status": "registered", "importer.commercial_importer": "yes", "goods.vehicle_form": "CBU",
+    t2 = agent.resume(t1.thread_id, {"answers": {"importer.registration_status": "registered", "importer.commercial_importer": "yes", "importer.active_taxpayer": "yes", "goods.vehicle_form": "CBU",
                                                  "goods.engine_cc": "1300cc", "goods.used_vehicle_commercial_import_ipo": "no"}})
     assert t2.final["status"] == "answer"
     direct = compute_duty("8703.2113", 2000000, D15, importer=IMP_RC, goods={"vehicle_form": "CBU", "engine_cc": "1300", "used_vehicle_commercial_import_ipo": False}, db_path=db)
@@ -343,7 +343,7 @@ def test_missing_inputs_trigger_clarify_instead_of_a_number(db):
 def test_hallucinated_value_without_a_quote_in_the_message_is_dropped(db):
     llm = tshirt_llm(understand=understand(goods_description="men's cotton T-shirts", value_text="PKR 9,999,999", **IMPORTER_FULL))
     agent, _ = make_agent(llm, db)
-    t1 = agent.ask("men's cotton T-shirts, registered importer, commercial importer", as_of_date=D15)
+    t1 = agent.ask("men's cotton T-shirts, registered importer, commercial importer, filer", as_of_date=D15)
     assert t1.interrupt and set(questions(t1)) == {"assessable_value_pkr"}
     assert "dropped unquoted facts: value" in " ".join(t1.trace)
 
@@ -351,7 +351,7 @@ def test_hallucinated_value_without_a_quote_in_the_message_is_dropped(db):
 def test_value_in_dollars_is_asked_in_rupees_not_converted(db):
     llm = tshirt_llm(understand=understand(goods_description="men's cotton T-shirts", value_text="$10,000", **IMPORTER_FULL))
     agent, _ = make_agent(llm, db)
-    t1 = agent.ask("men's cotton T-shirts worth $10,000, registered importer, commercial importer", as_of_date=D15)
+    t1 = agent.ask("men's cotton T-shirts worth $10,000, registered importer, commercial importer, filer", as_of_date=D15)
     assert set(questions(t1)) == {"assessable_value_pkr"}
     qt = questions(t1)["assessable_value_pkr"]["question"]
     assert "USD" in qt and "do not convert currencies" in qt
@@ -361,20 +361,20 @@ def test_i_dont_know_ends_in_needs_input_with_no_bill(db):
     llm = tshirt_llm(understand=understand(goods_description="men's cotton T-shirts", value_text="PKR 1,000,000"))
     agent, tools = make_agent(llm, db)
     t1 = agent.ask("men's cotton T-shirts, value PKR 1,000,000", as_of_date=D15)
-    assert set(questions(t1)) == {"importer.registration_status", "importer.commercial_importer"}
-    t2 = agent.resume(t1.thread_id, {"importer.registration_status": "I don't know", "importer.commercial_importer": "yes"})
+    assert set(questions(t1)) == {"importer.registration_status", "importer.commercial_importer", "importer.active_taxpayer"}
+    t2 = agent.resume(t1.thread_id, {"importer.registration_status": "I don't know", "importer.commercial_importer": "yes", "importer.active_taxpayer": "yes"})
     assert t2.final["status"] == "needs_input" and t2.final["bill"] is None
     assert "registered" in t2.final["text"] and not re.search(r"TOTAL PAYABLE", t2.final["text"]) and llm.count("verify") == 0
 
 
 def test_free_text_reply_to_several_questions_is_mapped_by_the_llm_then_read_by_code(db):
     llm = tshirt_llm(understand=understand(goods_description="men's cotton T-shirts", value_text="PKR 1,000,000"))
-    llm.script["map_answers"] = {"answers": {"importer.registration_status": "we are not registered", "importer.commercial_importer": "yes, we sell as is"}}
+    llm.script["map_answers"] = {"answers": {"importer.registration_status": "we are not registered", "importer.commercial_importer": "yes, we sell as is", "importer.active_taxpayer": "yes we are a filer"}}
     agent, _ = make_agent(llm, db)
     t1 = agent.ask("men's cotton T-shirts, value PKR 1,000,000", as_of_date=D15)
-    t2 = agent.resume(t1.thread_id, "We are not registered, but yes we sell them as they are")
+    t2 = agent.resume(t1.thread_id, "We are not registered, but yes we sell them as they are, and we are a filer")
     assert t2.final["status"] == "answer" and llm.count("map_answers") == 1
-    assert t2.final["bill"]["totals"]["total_payable_pkr"] == compute_duty("6109.1000", 1000000, D15, importer={"registration_status": "unregistered", "commercial_importer": True}, db_path=db)["totals"]["total_payable_pkr"]
+    assert t2.final["bill"]["totals"]["total_payable_pkr"] == compute_duty("6109.1000", 1000000, D15, importer={"registration_status": "unregistered", "commercial_importer": True, "active_taxpayer": True}, db_path=db)["totals"]["total_payable_pkr"]
     assert any(ln["tax"] == "FURTHER_TAX" for ln in t2.final["bill"]["optional_lines_not_in_total"])      # unregistered: further tax shown, not added
 
 
@@ -384,7 +384,7 @@ def code_only_llm(value_text, code, **extra):
 
 def test_specific_duty_asks_for_the_quantity_in_the_tariff_unit_and_never_converts(db):
     agent, _ = make_agent(code_only_llm("PKR 1,000,000", "1507.1000", **IMPORTER_FULL), db)
-    t1 = agent.ask("duty on 1507.1000, value PKR 1,000,000, registered importer, commercial importer", as_of_date=D15)
+    t1 = agent.ask("duty on 1507.1000, value PKR 1,000,000, registered importer, commercial importer, filer", as_of_date=D15)
     q = questions(t1)
     assert set(q) == {"quantity"} and q["quantity"]["unit"] == "MT" and "MT" in q["quantity"]["question"]
     t2 = agent.resume(t1.thread_id, "2000 kg")                          # wrong unit: refused, not converted
@@ -396,7 +396,7 @@ def test_specific_duty_asks_for_the_quantity_in_the_tariff_unit_and_never_conver
 
 def test_film_running_time_is_asked_as_a_number(db):
     agent, _ = make_agent(code_only_llm("PKR 1,000,000", "3706.1000", **IMPORTER_FULL), db)
-    t1 = agent.ask("duty on 3706.1000, value PKR 1,000,000, registered importer, commercial importer", as_of_date=D15)
+    t1 = agent.ask("duty on 3706.1000, value PKR 1,000,000, registered importer, commercial importer, filer", as_of_date=D15)
     assert "goods.running_time_minutes" in questions(t1) and questions(t1)["goods.running_time_minutes"]["type"] == "number"
     t2 = agent.resume(t1.thread_id, {"answers": {k: ("90 minutes" if k == "goods.running_time_minutes" else "1000 metres" if k == "quantity" else "no") for k in questions(t1)}})
     assert t2.interrupt is None or t2.interrupt["kind"] == "duty_input"
@@ -404,7 +404,7 @@ def test_film_running_time_is_asked_as_a_number(db):
 
 def test_mobile_phone_gives_a_partial_bill_and_no_total(db):
     agent, _ = make_agent(code_only_llm("PKR 1,000,000", "8517.1390", quantity_text="10 sets", **IMPORTER_FULL), db)
-    t1 = agent.ask("duty on 8517.1390, 10 sets, value PKR 1,000,000, registered importer, commercial importer", as_of_date=D15)
+    t1 = agent.ask("duty on 8517.1390, 10 sets, value PKR 1,000,000, registered importer, commercial importer, filer", as_of_date=D15)
     answers = {"goods.c_and_f_value_usd_per_unit": "150", "goods.plant_machinery_for_manufacturing": "no"}
     t2 = agent.resume(t1.thread_id, {"answers": {k: answers[k] for k in questions(t1) if k in answers}})
     f = t2.final
@@ -514,7 +514,7 @@ def test_no_matching_lines_means_no_llm_classification_and_a_not_sure_answer(db)
 def test_a_code_alone_skips_classify_and_the_llm_fit_check(db):
     llm = FakeLLM({"understand": understand(value_text="PKR 1,000,000", codes_text=["6109.1000"], **IMPORTER_FULL)})
     agent, _ = make_agent(llm, db)
-    f = agent.ask("duty on 6109.1000, value PKR 1,000,000, registered importer, commercial importer", as_of_date=D15).final
+    f = agent.ask("duty on 6109.1000, value PKR 1,000,000, registered importer, commercial importer, filer", as_of_date=D15).final
     assert f["status"] == "answer" and "667,380.00" in f["text"] and "language-model fit check was skipped" in json.dumps(f["verification"])
     assert llm.count("classify") == 0 and llm.count("verify") == 0
 
@@ -523,14 +523,14 @@ def test_a_code_that_is_not_in_the_tariff_is_reported_and_ignored(db):
     llm = FakeLLM({"understand": understand(goods_description="men's cotton T-shirts", value_text="PKR 1,000,000", codes_text=["6109.9999"], **IMPORTER_FULL),
                    "classify": classify(cand("6109.1000", 0.92)), "verify": verify()})
     agent, _ = make_agent(llm, db)
-    f = agent.ask("men's cotton T-shirts code 6109.9999, value PKR 1,000,000, registered importer, commercial importer", as_of_date=D15).final
+    f = agent.ask("men's cotton T-shirts code 6109.9999, value PKR 1,000,000, registered importer, commercial importer, filer", as_of_date=D15).final
     assert f["status"] == "answer" and "6109.9999" in f["text"] and "not a line of the tariff" in f["text"] and f["code"] == "6109.1000"
 
 
 def test_a_raw_eight_digit_amount_is_not_mistaken_for_a_code(db):
     llm = tshirt_llm(understand=understand(goods_description="men's cotton T-shirts", value_text="PKR 10000000", **IMPORTER_FULL))
     agent, _ = make_agent(llm, db)
-    t = agent.ask("men's cotton T-shirts, value PKR 10000000, registered importer, commercial importer", as_of_date=D15)
+    t = agent.ask("men's cotton T-shirts, value PKR 10000000, registered importer, commercial importer, filer", as_of_date=D15)
     assert t.state["user_codes"] == [] and t.final["status"] == "answer" and "10,000,000.00" in t.final["text"]
 
 
@@ -557,7 +557,7 @@ def test_sqlite_checkpointer_lets_a_paused_conversation_survive_a_restart(db, tm
     assert agent2.pending(t1.thread_id)["questions"][0]["id"] == "as_of_date"
     t2 = agent2.resume(t1.thread_id, "2026-07-15")
     assert t2.interrupt["kind"] == "duty_input"
-    t3 = agent2.resume(t2.thread_id, {"assessable_value_pkr": "1000000", "importer.registration_status": "registered", "importer.commercial_importer": "yes",
+    t3 = agent2.resume(t2.thread_id, {"assessable_value_pkr": "1000000", "importer.registration_status": "registered", "importer.commercial_importer": "yes", "importer.active_taxpayer": "yes",
                                       "importer.manufacturer_in_house_use": "no"})
     assert t3.final["status"] == "answer" and "197,800.00" in t3.final["text"]
     conn2.close()
@@ -587,7 +587,7 @@ def test_unrecognised_resume_payload_is_asked_again_without_an_llm_call(db):
 def test_structured_answers_may_be_real_booleans(db):
     agent, _ = make_agent(tshirt_llm(understand=understand(goods_description="men's cotton T-shirts", value_text="PKR 1,000,000")), db)
     t1 = agent.ask("men's cotton T-shirts, value PKR 1,000,000", as_of_date=D15)
-    t2 = agent.resume(t1.thread_id, {"answers": {"importer.registration_status": "registered", "importer.commercial_importer": True}})
+    t2 = agent.resume(t1.thread_id, {"answers": {"importer.registration_status": "registered", "importer.commercial_importer": True, "importer.active_taxpayer": True}})
     assert t2.final["status"] == "answer"
 
 
@@ -636,7 +636,7 @@ def test_real_search_feeds_the_classifier_with_notes_and_the_right_candidate(db)
 
     llm = FakeLLM({"understand": understand(goods_description="men's knitted cotton t-shirts", value_text="PKR 1,000,000", **IMPORTER_FULL), "classify": classifier, "verify": verify()})
     agent = CustomsAgent(llm, tools=RecordingTools(db))                       # real retriever, real notes loader, real tools
-    turn = agent.ask("men's knitted cotton t-shirts, value PKR 1,000,000, registered importer, commercial importer", as_of_date=D15)
+    turn = agent.ask("men's knitted cotton t-shirts, value PKR 1,000,000, registered importer, commercial importer, filer", as_of_date=D15)
     p = seen["prompt"]
     assert "6109.1000" in p and "Chapter 61 note" in p and "GRI rule 1" in p
     assert turn.final["status"] == "answer" and "667,380.00" in turn.final["text"]

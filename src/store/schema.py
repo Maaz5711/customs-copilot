@@ -266,6 +266,34 @@ CREATE TABLE IF NOT EXISTS fifth_schedule_rules (
 );
 CREATE INDEX IF NOT EXISTS ix_fifth_code ON fifth_schedule_rules (code_norm, valid_from, valid_to);
 
+CREATE TABLE IF NOT EXISTS fta_rules (
+    id INTEGER PRIMARY KEY,
+    row_id TEXT NOT NULL UNIQUE,      -- cpfta1640:<sr_no>:y<year_no>
+    instrument TEXT NOT NULL DEFAULT 'SRO 1640(I)/2019',
+    partner TEXT NOT NULL DEFAULT 'China',
+    sr_no INTEGER NOT NULL,           -- Sr.No of the SRO table (1..6786)
+    year_no INTEGER NOT NULL CHECK (year_no BETWEEN 1 AND 15),   -- column "Year n" (Year 1 = 1-Jan-2020)
+    calendar_year INTEGER NOT NULL,
+    column_date TEXT NOT NULL,        -- the date printed over the column, e.g. 1-Jan-26
+    description_ocr TEXT NOT NULL DEFAULT '',   -- description as read by OCR (context only, never used for matching)
+    category TEXT NOT NULL DEFAULT '',          -- constant_zero | constant_rate | A07 | A15 (fitted pattern, FBR category names)
+    pattern_base_rate REAL,
+    cells_read INTEGER,               -- yearly cells the OCR read on this line
+    cells_agree INTEGER,              -- of those, cells that agree with the fitted pattern
+    rate_source TEXT NOT NULL DEFAULT '',       -- ocr_fitted_to_taper_pattern | ocr_cells_only
+    condition_text TEXT NOT NULL DEFAULT '',
+    issues TEXT NOT NULL DEFAULT '',
+    {HIER_COLS},
+    rate_kind TEXT NOT NULL CHECK (rate_kind = 'percent'),
+    rate_pct REAL NOT NULL CHECK (rate_pct >= 0 AND rate_pct <= 100),
+    rate_raw TEXT,
+    {STATUS_COL},
+    {FACT_COLS},
+    {HIER_CHECK},
+    CHECK (match_level = 'code8')
+);
+CREATE INDEX IF NOT EXISTS ix_fta_code ON fta_rules (code_norm, valid_from, valid_to);
+
 CREATE TABLE IF NOT EXISTS legal_notes (
     id INTEGER PRIMARY KEY,
     note_kind TEXT NOT NULL CHECK (note_kind IN ('general_rule','section_note','chapter_note','subheading_note')),

@@ -36,10 +36,13 @@ def compute_duty(code: str, assessable_value_pkr: str, as_of_date: str, importer
     """Itemised import bill (CD, RD, ACD, sales tax, value addition tax, income tax) with the rule, SRO/clause, source
     file and page for every line. If an input the law requires is missing the result has status 'needs_input' and a
     'missing_inputs' list and NO total; ask the user those questions and call again.
-    importer: registration_status ('registered'|'unregistered'), commercial_importer (bool), manufacturer_in_house_use (bool),
+    importer: registration_status ('registered'|'unregistered'), commercial_importer (bool), active_taxpayer (bool; false = not on FBR's Active Taxpayers List, income tax doubled), manufacturer_in_house_use (bool),
       licensed_oil_marketing_company (bool), registered_service_provider_in_house_use (bool), income_tax_category.
     goods: vehicle_form ('CKD'|'CBU'), engine_cc, used_vehicle_commercial_import_ipo (bool), import_regime (list),
-      plant_machinery_for_manufacturing (bool), c_and_f_value_usd_per_unit, retail_price_total_pkr, running_time_minutes, age_years."""
+      plant_machinery_for_manufacturing (bool), c_and_f_value_usd_per_unit, retail_price_total_pkr, running_time_minutes, age_years,
+      origin_country ('CN' for China), has_certificate_of_origin (bool, Form E), claim_china_fta (bool).
+    claimed_rules: rule ids whose conditions the caller confirms; customs-duty concessions (fifth_schedule_rules:<id>, fta_rules:<id>) are listed under the
+    result's 'concessions' with the bill with and without them, and are applied ONLY when claimed."""
     return _compute_duty(code, assessable_value_pkr, as_of_date, importer=importer, quantity=quantity,
                          quantity_unit=quantity_unit, goods=goods, claimed_rules=claimed_rules, rounding=rounding)
 

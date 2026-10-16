@@ -23,7 +23,7 @@ import datetime as _dt
 import json
 import re
 
-HIER_TABLES = ("rd_rules", "acd_rules", "sales_tax_rules", "income_tax_rules", "fed_rules", "fifth_schedule_rules")
+HIER_TABLES = ("rd_rules", "acd_rules", "sales_tax_rules", "income_tax_rules", "fed_rules", "fifth_schedule_rules", "fta_rules")
 KEY_COLUMNS = {
     "tariff_lines": "code_norm",
     "tariff_headings": "heading",
