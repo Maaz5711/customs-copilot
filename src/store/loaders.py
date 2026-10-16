@@ -354,6 +354,10 @@ TABLE_COLUMNS = {
                   ["sub", "sub_desc", "heading_raw", "rate_basis", "rate_ref_s_no", "compound_rule", "cc_ge", "cc_gt", "cc_le",
                    "usd_gt", "usd_le", "condition_text", "effective_note", "amended_by", "issues", "except_codes",
                    "unparsed_except_text", "rate_pct", "rate_specific_amount", "rate_specific_unit", "rate_raw", "status"]),
+    "fifth_schedule_rules": (["rule_id", "part", "table_no", "s_no", "code_norm", "match_level", "rule_group", "rate_kind"],
+                             ["sub_ref", "scope", "title", "group_context", "description", "description2", "sub_items_text",
+                              "code_raw", "conditions", "part_conditions_ref", "except_codes", "unparsed_except_text",
+                              "rate_raw", "rate_pcts", "rate_fraction_pct", "rate_note", "issues", "extraction_method", "status"]),
 }
 FACT = ["valid_from", "valid_to", "source_file", "page"]
 
@@ -395,7 +399,9 @@ def load_table_file(conn: sqlite3.Connection, table: str, path: Path) -> int:
                 vals["except_codes"] = json.dumps(vals["except_codes"])
             vals = {k: v for k, v in vals.items() if not (v is None and k in ("except_codes", "status",
                     "unparsed_except_text", "importer_status", "hs_edition", "table_json",
-                    "sub", "heading_raw", "issues"))}
+                    "sub", "heading_raw", "issues", "sub_ref", "scope", "title", "group_context", "description",
+                    "description2", "sub_items_text", "code_raw", "conditions", "part_conditions_ref", "rate_raw",
+                    "rate_pcts", "rate_note", "extraction_method"))}
             cols = list(vals)
             cur.execute(f"INSERT INTO {table} ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
                         [vals[c] for c in cols])
@@ -491,4 +497,22 @@ def legal_notes_rows(path: Path | None = None) -> list[dict]:
     for key in OWNER_OK_NOTES:   # owner_tasks N365-Chapter74-1, N366-Chapter74-1, N376-Chapter78-1: answer 'ok'
         row = next(x for x in out if (x["note_kind"], x["scope"], x["note_no"]) == key)
         row["status"] = "verified"
+    return out
+
+
+# ------------------------------------------------------- A7 Fifth Schedule (customs concessions)
+
+def fifth_rows(path: Path | None = None) -> list[dict]:
+    """Map data/processed/a7_fifth_rules.csv to the fifth_schedule_rules contract (table -> table_no, rule_group per serial)."""
+    path = Path(path or PROC / "a7_fifth_rules.csv")
+    out = []
+    with open(path, encoding="utf8", newline="") as f:
+        for r in csv.DictReader(f):
+            r = dict(r)
+            r["table_no"] = r.pop("table")
+            r.pop("band_y", None)
+            r["rule_group"] = f"FIFTH-{r['part']}-{r['table_no']}-{r['s_no']}"
+            if r["match_level"] == "unmapped":
+                r["code_norm"] = ""      # blank CSV cell becomes NULL in load_table_file
+            out.append(r)
     return out

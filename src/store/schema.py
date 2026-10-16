@@ -230,6 +230,42 @@ CREATE TABLE IF NOT EXISTS fed_rules (
 );
 CREATE INDEX IF NOT EXISTS ix_fed_code ON fed_rules (code_norm, valid_from, valid_to);
 
+CREATE TABLE IF NOT EXISTS fifth_schedule_rules (
+    id INTEGER PRIMARY KEY,
+    rule_id TEXT NOT NULL UNIQUE,     -- A7F-00001 (data/processed/a7_fifth_rules.csv)
+    part TEXT NOT NULL,               -- I, II, III, IV, V(A), V(B), V(C), VI, VIII (Fifth Schedule to the Customs Act 1969)
+    table_no TEXT NOT NULL,           -- 'main', 'A'..'E' (Part II), 'I'..'III' (Part V)
+    s_no TEXT NOT NULL,               -- serial as printed: '1', '8(a)', '15A'
+    sub_ref TEXT NOT NULL DEFAULT '', -- item label inside the serial: '(1).', 'i.'
+    scope TEXT NOT NULL DEFAULT '',   -- plant_machinery_part_I, pharma_api, ... (see docs/store_schema.md)
+    title TEXT NOT NULL DEFAULT '',   -- first row text of the serial
+    group_context TEXT NOT NULL DEFAULT '',  -- group heading above the item (A) Tillage ...
+    description TEXT NOT NULL DEFAULT '',
+    description2 TEXT NOT NULL DEFAULT '',
+    sub_items_text TEXT NOT NULL DEFAULT '', -- illustrative list that follows the item
+    code_raw TEXT NOT NULL DEFAULT '',       -- PCT column exactly as read ('Respective headings' = no code)
+    conditions TEXT NOT NULL DEFAULT '',     -- Conditions column text (never evaluated by the store)
+    part_conditions_ref TEXT NOT NULL DEFAULT '',
+    {HIER_COLS},
+    rate_kind TEXT NOT NULL CHECK (rate_kind IN ('percent','fraction_of_first_schedule','nil','other','none')),
+    rate_raw TEXT NOT NULL DEFAULT '',
+    rate_pcts TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(rate_pcts)),   -- listed rates, ascending, e.g. ["0","3","5"]
+    rate_fraction_pct REAL,           -- 50 for "50% of the prevailing rate"
+    rate_note TEXT NOT NULL DEFAULT '',
+    issues TEXT NOT NULL DEFAULT '',
+    extraction_method TEXT NOT NULL DEFAULT '',
+    {STATUS_COL},
+    {FACT_COLS},
+    {HIER_CHECK},
+    CHECK (COALESCE(
+        (rate_kind = 'percent' AND json_array_length(rate_pcts) >= 1) OR
+        (rate_kind = 'fraction_of_first_schedule' AND rate_fraction_pct IS NOT NULL
+                               AND rate_fraction_pct > 0 AND rate_fraction_pct <= 100) OR
+        (rate_kind IN ('nil','other','none'))
+    , 0))
+);
+CREATE INDEX IF NOT EXISTS ix_fifth_code ON fifth_schedule_rules (code_norm, valid_from, valid_to);
+
 CREATE TABLE IF NOT EXISTS legal_notes (
     id INTEGER PRIMARY KEY,
     note_kind TEXT NOT NULL CHECK (note_kind IN ('general_rule','section_note','chapter_note','subheading_note')),
