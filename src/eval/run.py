@@ -18,7 +18,7 @@ from pathlib import Path
 
 from src.agent.llm import LLMBudgetExceeded, LLMRateLimited
 
-from .cases import Case, load_cases, load_duty_cases
+from .cases import Case, load_cases, load_duty_cases, load_importer_cases
 from .systems import RUNNERS, SYSTEMS
 
 OUT = Path("data/processed/eval")
@@ -104,7 +104,7 @@ def run(systems, cases, llm, out: Path = OUT, rerun_errors: bool = False, log=pr
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--systems", nargs="+", default=list(SYSTEMS), choices=SYSTEMS)
-    ap.add_argument("--kinds", nargs="+", default=["real", "synthetic"], choices=["real", "synthetic", "duty"])
+    ap.add_argument("--kinds", nargs="+", default=["real", "synthetic"], choices=["real", "synthetic", "duty", "importer"])
     ap.add_argument("--ids", nargs="+")
     ap.add_argument("--sample", type=int, help="N cases per kind, fixed random subset")
     ap.add_argument("--seed", type=int, default=1)
@@ -123,7 +123,7 @@ def main(argv=None):
 
         ov = {k: v for k, v in (("model", a.classify_model), ("thinking", a.classify_thinking)) if v}
         llm = DeepSeekLLM(max_calls=a.max_llm_calls, overrides={"classify": ov} if ov else None) if a.llm == "deepseek" else GeminiLLM(max_calls=a.max_llm_calls)
-        cases = select(load_cases(tuple(k for k in a.kinds if k != "duty")) + (load_duty_cases() if "duty" in a.kinds else []), a.sample, a.seed, a.ids)
+        cases = select(load_cases(tuple(k for k in a.kinds if k != "duty")) + (load_duty_cases() if "duty" in a.kinds else []) + (load_importer_cases() if "importer" in a.kinds else []), a.sample, a.seed, a.ids)
         res = run(a.systems, cases, llm, a.out, a.rerun_errors)
         print(res, "| live calls:", llm.stats["live_calls"], "cache hits:", llm.stats["cache_hits"], "| tokens in/out:", llm.stats.get("tokens_in"), llm.stats.get("tokens_out"))
     from .report import write_report
