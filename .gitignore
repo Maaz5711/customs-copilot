@@ -21,3 +21,4 @@ data/processed/review/*.html
 # search index (rebuild with python -m src.search.build)
 data/processed/search_index/
 data/processed/cpfta_ocr/
+data/processed/a7_fifth_rules_store.json
