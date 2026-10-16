@@ -50,6 +50,22 @@ def _save(system: str, rec: dict, out: Path) -> None:
     tmp.replace(results_path(system, out))
 
 
+
+def merge_results(dirs, out: Path = OUT) -> int:
+    """Copy the finished cases of several shard folders into `out` (a case already in `out` is kept). Returns the number of cases added."""
+    added = 0
+    for system in SYSTEMS:
+        merged = load_results(system, out)
+        for d in dirs:
+            for cid, rec in load_results(system, Path(d)).items():
+                if cid not in merged:
+                    merged[cid] = rec
+                    added += 1
+        for rec in merged.values():
+            _save(system, rec, out)
+    return added
+
+
 def select(cases: list[Case], sample: int | None, seed: int, ids: list[str] | None) -> list[Case]:
     if ids:
         return [c for c in cases if c.id in set(ids)]
@@ -73,11 +89,14 @@ def run_case(system: str, case: Case, llm, **kw) -> dict:
                 expected_behavior=case.behavior, pred=pred, seconds=round(time.time() - t0, 1))
 
 
-def run(systems, cases, llm, out: Path = OUT, rerun_errors: bool = False, log=print, **kw) -> dict:
+def run(systems, cases, llm, out: Path = OUT, rerun_errors: bool = False, log=print, skip_dirs=(), **kw) -> dict:
     """Returns {'done': n, 'skipped': n, 'stopped': reason or None}."""
     done = skipped = 0
     for system in systems:
         have = load_results(system, out)
+        for d in skip_dirs:                       # results already produced elsewhere (another shard or an earlier run)
+            for cid, rec in load_results(system, Path(d)).items():
+                have.setdefault(cid, rec)
         for case in cases:
             old = have.get(case.id)
             if old and not (rerun_errors and old["pred"].get("behavior") == "error"):
@@ -110,6 +129,9 @@ def main(argv=None):
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--max-llm-calls", type=int, default=100, help="cap on LIVE calls in this process (cache hits are free)")
     ap.add_argument("--rerun-errors", action="store_true")
+    ap.add_argument("--shard", help="i/n: run only every n-th case starting at i, so n workers can run in parallel; give each worker its own --tag and merge with --merge-from")
+    ap.add_argument("--skip-done-in", nargs="*", default=[], help="folders whose finished cases are skipped")
+    ap.add_argument("--merge-from", nargs="*", default=[], help="copy the results of these shard folders into --out (or the default folder) and exit")
     ap.add_argument("--report", action="store_true", help="only rebuild the report")
     ap.add_argument("--llm", choices=("gemini", "deepseek"), default="gemini", help="which provider answers; results are kept in a folder per provider")
     ap.add_argument("--classify-model", help="DeepSeek model for the Classify step only (for example deepseek-v4-pro)")
@@ -118,13 +140,20 @@ def main(argv=None):
     ap.add_argument("--out", type=Path, default=None)
     a = ap.parse_args(argv)
     a.out = a.out or OUT / (a.llm + ("_" + a.tag if a.tag else ""))
+    if a.merge_from:
+        merge_results(a.merge_from, a.out)
+        print("merged", len(a.merge_from), "folders into", a.out)
+        a.report = True
     if not a.report:
         from src.agent import DeepSeekLLM, GeminiLLM
 
         ov = {k: v for k, v in (("model", a.classify_model), ("thinking", a.classify_thinking)) if v}
         llm = DeepSeekLLM(max_calls=a.max_llm_calls, overrides={"classify": ov} if ov else None) if a.llm == "deepseek" else GeminiLLM(max_calls=a.max_llm_calls)
         cases = select(load_cases(tuple(k for k in a.kinds if k != "duty")) + (load_duty_cases() if "duty" in a.kinds else []) + (load_importer_cases() if "importer" in a.kinds else []), a.sample, a.seed, a.ids)
-        res = run(a.systems, cases, llm, a.out, a.rerun_errors)
+        if a.shard:
+            i, n = (int(x) for x in a.shard.split("/"))
+            cases = cases[i::n]
+        res = run(a.systems, cases, llm, a.out, a.rerun_errors, skip_dirs=a.skip_done_in)
         print(res, "| live calls:", llm.stats["live_calls"], "cache hits:", llm.stats["cache_hits"], "| tokens in/out:", llm.stats.get("tokens_in"), llm.stats.get("tokens_out"))
     from .report import write_report
 

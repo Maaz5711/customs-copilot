@@ -137,3 +137,27 @@ def test_report_states_sizes_and_limits_and_never_mixes_kinds(tmp_path):
     assert "Code accuracy: real" in text and "Code accuracy: synthetic" in text and "(1/1;" in text
     assert "n=0: there are no hand-computed bills" in text
     assert "Danial" in text
+
+
+# ------------------------------------------------------------------ shards (parallel workers) and merging
+def test_two_shards_cover_every_case_once_and_merge_without_duplicates(tmp_path):
+    from src.eval.run import merge_results
+
+    cases = [case(f"C{i}") for i in range(6)]
+    seq = {"eval_plain": {"behavior": "answer", "codes": ["6109.1000"], "reason": ""}}
+    out0, out1, main = tmp_path / "s0", tmp_path / "s1", tmp_path / "main"
+    run(["plain_llm"], cases[0::2], FakeLLM(dict(seq)), out0, log=lambda *_: None)
+    run(["plain_llm"], cases[1::2], FakeLLM(dict(seq)), out1, log=lambda *_: None)
+    assert merge_results([out0, out1], main) == 6
+    assert set(load_results("plain_llm", main)) == {f"C{i}" for i in range(6)}
+    assert merge_results([out0, out1], main) == 0                      # merging again adds nothing
+
+
+def test_cases_finished_in_another_folder_are_skipped(tmp_path):
+    cases = [case("A"), case("B")]
+    seq = {"eval_plain": {"behavior": "answer", "codes": ["6109.1000"], "reason": ""}}
+    done = tmp_path / "done"
+    run(["plain_llm"], [cases[0]], FakeLLM(dict(seq)), done, log=lambda *_: None)
+    llm = FakeLLM(dict(seq))
+    r = run(["plain_llm"], cases, llm, tmp_path / "new", skip_dirs=[done], log=lambda *_: None)
+    assert r["done"] == 1 and r["skipped"] == 1 and llm.count("eval_plain") == 1
