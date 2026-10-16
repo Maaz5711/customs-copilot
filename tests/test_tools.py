@@ -196,20 +196,20 @@ def test_hand_7_sales_tax_reduced_rate_laptop():
     assert [m["field"] for m in r2["missing_inputs"]] == ["importer.manufacturer_in_house_use"]
 
 
-def test_hand_8_unregistered_further_tax_shown_not_added():
-    # Same goods as hand case 1 (6005.4400) but an UNREGISTERED importer.
-    # Further tax s.3(1A) (p.28): "four percent of the value" for supplies to unregistered persons. Whether Customs collects it at import is not
-    # in the documents (OPEN-4), so it is reported on its own line and NOT in the total.
-    # further tax = 4% x V_ST (1,100,000) = 44,000 ; total unchanged 410,860 ; total if it applied = 454,860
+def test_hand_8_unregistered_further_tax_is_added_at_the_standard_rate():
+    # Same goods as hand case 1 (6005.4400) but an UNREGISTERED importer. Further tax s.3(1A) (p.28): "four percent of the value" for supplies to unregistered persons.
+    # CHANGED 2026-10-16: real assessed Goods Declarations (importer extract, Chapter 85, Feb 2026, docs/gd_findings.md) show Customs collecting the 3% value addition tax plus this
+    # 4% (7% of V_ST in total) at import and putting it into the income-tax base, on lines taxed at the standard 18%. So at 18% it is now added.
+    # further tax = 4% x V_ST (1,100,000) = 44,000 ; V_IT = 1,100,000 + ST 198,000 + VAT 33,000 + further tax 44,000 = 1,375,000 ; IT 6% = 82,500
+    # total = 100,000 + 198,000 + 33,000 + 44,000 + 82,500 = 457,500
     imp = {**IMP, "registration_status": "unregistered"}
     res = compute_duty("6005.4400", 1000000, "2026-07-15", importer=imp)
-    check(res, {"CD": "100000.00", "RD": "0.00", "ACD": "0.00", "ST": "198000.00", "VAT": "33000.00", "IT": "79860.00"}, "410860.00")
-    (ft,) = res["optional_lines_not_in_total"]
-    assert ft["tax"] == "FURTHER_TAX" and ft["amount_pkr"] == "44000.00" and ft["included_in_total"] is False
-    assert res["totals"]["total_if_open_items_apply_pkr"] == "454860.00"
-    assert "OPEN4" in {a["id"] for a in res["assumptions"]}
+    check(res, {"CD": "100000.00", "RD": "0.00", "ACD": "0.00", "ST": "198000.00", "VAT": "33000.00", "FURTHER_TAX": "44000.00", "IT": "82500.00"}, "457500.00")
+    assert res["optional_lines_not_in_total"] == []
+    ft = next(ln for ln in res["lines"] if ln["tax"] == "FURTHER_TAX")
+    assert ft["included_in_total"] is True and "OPEN4" in {a["id"] for a in res["assumptions"]}
     reg = compute_duty("6005.4400", 1000000, "2026-07-15", importer=IMP)
-    assert reg["optional_lines_not_in_total"] == []
+    assert reg["optional_lines_not_in_total"] == [] and "FURTHER_TAX" not in amounts(reg)
 
 
 def test_hand_9_income_tax_classes_I_II_III():
