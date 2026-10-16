@@ -116,3 +116,48 @@ def test_norm_codes():
     assert norm_codes("8701.9220 8701.9320")[0] == ["87019220", "87019320"]
     assert norm_codes("Respective headings")[2] is True
     assert norm_codes("PCT code 85.07")[:2] == (["8507"], ["heading4"])
+
+
+# ---------------------------------------------------------------- FY2025-26 file (202585238495687Fifth-Schedule.pdf, FBR)
+@pytest.fixture(scope="module")
+def rules25():
+    return list(csv.DictReader(open(PROC / "a7_fifth_rules_2025_26.csv", encoding="utf-8")))
+
+
+def test_2025_26_dates_and_source(rules25):
+    assert len(rules25) > 1400
+    for r in rules25:
+        assert r["valid_from"] == "2025-07-01" and r["valid_to"] == "2026-06-30" and r["source_file"] == "202585238495687Fifth-Schedule.pdf"
+
+
+# page 38 of the FY2025-26 file: S.No 36 (i) tubes/pipes 7303.0000 0%; S.No 37 8544.6090 11%; S.No 38 5%; S.No 39 tourism 50% of the prevailing rate
+def test_2025_26_page_38_rows(rules25):
+    a = find(rules25, part="I", s_no="36", code_norm="73030000")
+    assert a and a[0]["rate_raw"] == "0%" and a[0]["page"] == "38"
+    assert find(rules25, part="I", s_no="37", code_norm="85446090")[0]["rate_raw"] == "11%"
+    t = find(rules25, part="I", s_no="39", code_norm="94061090")
+    assert t and t[0]["rate_kind"] == "fraction_of_first_schedule"
+
+
+def test_2025_26_table_e_diagnostic_kits_exist_only_in_2025(rules25, rules):
+    # Part II Table E (3822.0000 diagnostic kits) is printed in the FY2025-26 file and "[Omitted]" in the FY2026-27 file (p.41)
+    assert [r for r in rules25 if r["part"] == "II" and r["table"] == "E"]
+    assert not [r for r in rules if r["part"] == "II" and r["table"] == "E"]
+
+
+def test_2025_26_validators_clean_of_structural_failures():
+    fails = list(csv.DictReader(open(PROC / "a7_fifth_failures_2025_26.csv", encoding="utf-8")))
+    checks = {f["check"] for f in fails}
+    assert "code_in_page_text_not_in_parsed_rows" not in checks and "serial_gap" not in checks
+
+
+def test_diff_report_exists_and_records_a_real_rate_change():
+    d = list(csv.DictReader(open(PROC / "a7_fifth_diff_2025_26_vs_2026_27.csv", encoding="utf-8")))
+    # S.No 27 motor vehicles for the transport of goods: 20% in the FY2025-26 file (p.29), 10% in the FY2026-27 file (p.16)
+    x = [r for r in d if r["part"] == "I" and r["s_no"] == "27" and r["key"] == "87041090"]
+    assert x and x[0]["change"] == "rate_changed" and x[0]["rate_2025_26"] == "20%" and x[0]["rate_2026_27"] == "10%"
+
+
+def test_spot_check_2025_26(rules25):
+    sheet = list(csv.DictReader(open(PROC / "spotcheck_a7_fifth_2025_26.csv", encoding="utf-8")))
+    assert len(sheet) >= 0.10 * len(rules25)

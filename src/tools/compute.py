@@ -11,6 +11,7 @@ from decimal import Decimal, InvalidOperation
 from ._util import (
     D, collect, coverage, fmt, get_conn, group_rows, money, norm_code, rule_view, rows, sro_info, to_iso,
 )
+from .concessions import fifth_block, fta_block, public
 from .fed import apply_fed
 from .lookup import lookup_code
 from .rules import (
@@ -50,10 +51,13 @@ ASSUME_TEXT = {
     "TWELFTH_P3": "Income-tax class Part III (residual) was chosen because no Part I or Part II entry matched the code. Twelfth Schedule entries that name goods only in words cannot be matched by code (OPEN-9).",
     "PROVISOS": "None of the First Schedule Part II provisos (SRO 1125 manufacturers, DRAP-certified pharmaceuticals, EV CKD kits) was claimed.",
     "OPEN3": "More than one sales-tax rate source matched; the documented precedence was applied (OPEN-3).",
+    "CONCESSION_CONDITIONS": "A customs-duty concession was applied because the caller claimed it. The conditions printed with it (certificates, local-manufacture lists, sector approvals, origin proof) are NOT checked by the tool; the importer must meet them or Customs can recover the duty.",
+    "FIFTH_ACD": "ACD is not levied on imports under the Fifth Schedule (ACD SRO para 3(iii)), except the serials that clause excludes; the caller's claim of the Fifth Schedule entry is taken as the 'import under the Fifth Schedule' the clause needs.",
+    "FTA_BASE": "Under SRO 1640(I)/2019 only the customs duty is reduced. RD and ACD stay as in their own SROs (the ACD slab test uses the First Schedule CD of the code); sales tax, value addition tax and income tax are computed on bases that include the CD actually paid.",
 }
 
 NOT_APPLIED = [
-    "Customs duty exemptions and concessions under the Fifth Schedule, FTA/PTA and other SROs are not in the store; only the tariff CD is applied.",
+    "Customs-duty concessions in the store (Fifth Schedule from 1 Jul 2026, China FTA Phase II SRO 1640(I)/2019) are offered under `concessions` and never applied unless the caller lists the rule id in claimed_rules. Other FTAs/PTAs (Malaysia, Indonesia, Sri Lanka, SAFTA, Iran, Mauritius, Uzbekistan, Afghanistan) and other concession SROs are not in the store.",
     "Conditional sales tax exemptions and reduced rates (Sixth, Eighth and Fifth Schedule rows with conditions) are NOT applied unless the caller lists the rule id in claimed_rules; see possible_rules_not_applied.",
     "Federal excise duty: Third Schedule exemptions are never applied (listed under possible_rules_not_applied); FED notifications issued during the year are not in data/raw (OQ-A6-9); electric vehicles are not computed (OQ-A6-1).",
     "Schedule entries that name goods only in words (no PCT code) cannot be matched by code and are not checked.",
@@ -97,6 +101,17 @@ class _Bill:
 def _cite(table, row, kind):
     v = rule_view(table, row, kind)
     return {k: v[k] for k in ("rule_id", "instrument", "clause", "source_file", "page", "valid_from", "valid_to", "status", "rule_group") if k in v}
+
+
+def _atl_rule_cite(d: str) -> dict:
+    """Income Tax Ordinance, Tenth Schedule rule 1: tax collected from a person NOT on the Active Taxpayers' List is increased by 100% of the rate
+    (section 148 is not among the exceptions listed in that Schedule). Read on the PDF pages named here; the rule has stood since Finance Act 2019."""
+    if d < "2026-07-01":
+        f, pg = "2026226162211364IncomeTaxOrdinance2001-Amended-20.02.2026.pdf", 780
+    else:
+        f, pg = "2026724177725705IncomeTaxOrdinanace2001.pdf", 798
+    return {"instrument": "Income Tax Ordinance 2001", "clause": "Tenth Schedule rule 1 (persons not appearing in the active taxpayers' list: rate increased by 100%)",
+            "source_file": f, "page": pg}
 
 
 def _line(bill, tax, label, rate, base_label, base, amount, cite, row=None, assumptions=(), flags=(), included=True, note=None):
@@ -166,11 +181,12 @@ def _no_entry_line(conn, kind, d, table_label, excluded):
     return cite, note
 
 
-def compute_duty(code, assessable_value_pkr, as_of_date, importer=None, quantity=None, quantity_unit=None,
-                 goods=None, claimed_rules=None, rounding="paisa", db_path=None) -> dict:
-    """Itemised duty bill. See docs/tools.md for inputs, order of calculation and statuses.
+def _compute_core(code, assessable_value_pkr, as_of_date, importer=None, quantity=None, quantity_unit=None,
+                  goods=None, claimed_rules=None, rounding="paisa", db_path=None, cd_override=None, force_regimes=()) -> dict:
+    """Itemised duty bill (one scenario). `cd_override` replaces the tariff CD by a concession (set only by compute_duty).
+    See docs/tools.md for inputs, order of calculation and statuses.
 
-    importer: {'registration_status': 'registered'|'unregistered', 'commercial_importer': bool,
+    importer: {'registration_status': 'registered'|'unregistered', 'commercial_importer': bool, 'active_taxpayer': bool (on FBR's Active Taxpayers List; false doubles the income tax),
                'manufacturer_in_house_use': bool, 'registered_service_provider_in_house_use': bool,
                'licensed_oil_marketing_company': bool, 'income_tax_category': None|'sro_1125_manufacturer'|'pharma_drap_certified'|'ckd_ev_kit'}
     goods:    {'vehicle_form': 'CKD'|'CBU', 'engine_cc': number, 'used_vehicle_commercial_import_ipo': bool,
@@ -202,10 +218,15 @@ def compute_duty(code, assessable_value_pkr, as_of_date, importer=None, quantity
                 "reason": "Chapter 99 entries are conditional import regimes; compute_duty works on eight-digit lines only"}
     fy = tl["fy"]
     trow = _tariff_row(conn, fy, c)
+    if force_regimes:
+        goods = dict(goods or {})
+        goods["import_regime"] = sorted(set(goods.get("import_regime") or []) | set(force_regimes))
     facts = Facts(importer, goods, claimed_rules)
     bill = _Bill()
     bill.assume("ROUNDING")
     bill.assume("FED")
+    for a in (cd_override or {}).get("assumptions", ()):
+        bill.assume(a)
     R = lambda x: money(x, rounding)  # noqa: E731
 
     # ---------------- importer status (required: further tax and the documents' registered/unregistered split)
@@ -219,7 +240,15 @@ def compute_duty(code, assessable_value_pkr, as_of_date, importer=None, quantity
     cd_cite = {"rule_id": f"tariff_lines:{trow['id']}", "instrument": f"Pakistan Customs Tariff {fy}", "clause": f"PCT {trow['code']}, column CD",
                "source_file": trow["source_file"], "page": trow["page"], "valid_from": trow["valid_from"], "valid_to": trow["valid_to"],
                "status": trow["status"], "rule_group": "TARIFF"}
-    if trow["cd_kind"] == "plain":
+    if cd_override is not None:
+        rate = cd_override["pct"]
+        cd_amt = R(V * rate / HUNDRED)
+        normal = f"{fmt(D(trow['cd_rate']))}%" if trow["cd_kind"] == "plain" else f"specific ({trow['cd_raw']})"
+        ln = _line(bill, "CD", f"Customs duty under concession: {cd_override['label']}", {"kind": "percent", "pct": fmt(rate)}, "assessable value", V,
+                   cd_amt, cd_override["cite"], cd_override["row"], assumptions=("CONCESSION_CONDITIONS",),
+                   note=f"{cd_override['how']}; normal tariff duty {normal} (Tariff {fy} page {trow['page']})")
+        ln["concession"] = {"rule_id": cd_override["cite"]["rule_id"], "normal_cd": normal}
+    elif trow["cd_kind"] == "plain":
         rate = D(trow["cd_rate"])
         cd_amt = R(V * rate / HUNDRED)
         _line(bill, "CD", "Customs duty", {"kind": "percent", "pct": fmt(rate)}, "assessable value", V, cd_amt, cd_cite, trow)
@@ -535,12 +564,22 @@ def compute_duty(code, assessable_value_pkr, as_of_date, importer=None, quantity
                 else:
                     base_it = V + cd_amt + rd_total + acd_amt + fed_amt + sed_amt + st_amt + (vat_amt or Decimal(0))
                     base_it_label = "V + CD + RD + ACD + FED + SED + ST + VAT (ITO First Schedule Part II col. 3, s.148(9)(b))"
-                if base_it is not None:
-                    pct = _pct(chosen)
-                    it_amt = R(base_it * pct / HUNDRED)
+                atl = facts.ib("active_taxpayer")
+                if base_it is not None and atl is None:
+                    bill.need("importer.active_taxpayer", "Is the importer on FBR's Active Taxpayers List (a 'filer')? (yes/no)",
+                              "ITO Tenth Schedule rule 1: for a person who is not on the list, the income tax collected at import is doubled (for example 6% becomes 12% for a commercial importer of Part III goods).",
+                              [True, False], ["income_tax"])
+                elif base_it is not None:
+                    pct = base_pct = _pct(chosen)
+                    note = f"Class Part {ROMAN[cls]}: " + (cls_row["clause"] if cls_row else "residual (no Part I/II entry)")
                     cite = _cite("income_tax_rules", chosen, "IT")
+                    if atl is False:
+                        pct = base_pct * 2
+                        note += f"; the importer is NOT on the Active Taxpayers List, so the rate is doubled from {fmt(base_pct)}% (ITO Tenth Schedule rule 1)"
+                        cite = {**cite, "atl_rule": _atl_rule_cite(d)}
+                    it_amt = R(base_it * pct / HUNDRED)
                     _line(bill, "IT", f"Income tax at import, s.148 (Twelfth Schedule Part {ROMAN[cls]})", {"kind": "percent", "pct": fmt(pct)}, base_it_label, base_it, it_amt, cite, chosen,
-                          assumptions=("OPEN2", "OPEN10") if not third_goods else (), note=f"Class Part {ROMAN[cls]}: " + (cls_row["clause"] if cls_row else "residual (no Part I/II entry)"))
+                          assumptions=("OPEN2", "OPEN10") if not third_goods else (), note=note)
         bill.notes.append("Income tax at import is a minimum tax on the importer's income (ITO s.148(7)); it is not shown as adjustable here.")
 
     if c.startswith("1701"):
@@ -598,4 +637,136 @@ def compute_duty(code, assessable_value_pkr, as_of_date, importer=None, quantity
     else:
         res["totals"] = None
         res["partial_total_of_computed_lines_pkr"] = fmt(sum((D(ln["amount_pkr"]) for ln in bill.lines), Decimal(0)), 2)
+    return res
+
+
+# ----------------------------------------------------------------------------------------------- concessions wrapper
+MAX_ALT_BILLS = 8
+TOTAL_KEYS = ("customs_duties", "federal_excise_duty", "sales_tax", "income_tax", "total_payable_pkr")
+
+
+def _bill_summary(res: dict) -> dict:
+    return {"status": res["status"], "totals": res.get("totals"),
+            "lines": [{k: ln.get(k) for k in ("tax", "label", "rate", "base_pkr", "amount_pkr", "rule_id", "included_in_total")} for ln in res.get("lines", [])]}
+
+
+def _diff(base_tot, alt_tot):
+    if not base_tot or not alt_tot:
+        return None
+    return {k: fmt(D(alt_tot[k]) - D(base_tot[k]), 2) for k in TOTAL_KEYS if k in base_tot and k in alt_tot}
+
+
+def _concession_questions(c, goods, fifth, fta, fta_any_row, claimed_ids):
+    qs = []
+    g = goods or {}
+    if fta_any_row and g.get("origin_country") in (None, ""):
+        qs.append({"id": "origin_country", "field": "goods.origin_country",
+                   "question": "In which country were the goods produced or manufactured (not the country they were shipped from)?",
+                   "why": "SRO 1640(I)/2019 (China-Pakistan FTA Phase II) gives a lower customs duty on goods of Chinese origin; the code has a row in that SRO.",
+                   "allowed": ["CN", "other country name"]})
+    if fta_any_row and (fta.get("origin") is True) and fta.get("certificate") is None:
+        qs.append({"id": "certificate_of_origin", "field": "goods.has_certificate_of_origin",
+                   "question": "Do you hold a valid Certificate of Origin (Form E) for these goods, issued in China under the China-Pakistan FTA?",
+                   "why": "The SRO's proviso: the goods must be manufactured or produced in China and imported in conformity with the Rules of Origin (S.R.O. 1286(I)/2005) and the certification procedure.",
+                   "allowed": [True, False]})
+    if fifth.get("options") and not ({o["rule_id"] for o in fifth["options"]} & claimed_ids):
+        qs.append({"id": "fifth_schedule_claim", "field": "claimed_rules",
+                   "question": "Is the importer entitled to a Fifth Schedule concession for these goods? Check the conditions listed with each option (certificates, local-manufacture list, sector approval). If yes, tell me which entry.",
+                   "why": "Fifth Schedule entries replace the normal customs duty only if their conditions are met; the tool cannot check them.",
+                   "allowed": [o["rule_id"] for o in fifth["options"][:10]]})
+    elif c[:2] in ("84", "85") and fifth.get("possible_by_description") and not fifth.get("options"):
+        qs.append({"id": "fifth_schedule_by_description", "field": "claimed_rules",
+                   "question": "Are these goods plant, machinery or equipment for one of the industries in Part I of the Fifth Schedule (agriculture, mining, power, solar, textile, pharma ...)? If yes, which entry?",
+                   "why": "Part I entries printed 'Respective Headings' name the goods only in words; see concessions.fifth_schedule.possible_by_description.",
+                   "allowed": [True, False]})
+    return qs
+
+
+def compute_duty(code, assessable_value_pkr, as_of_date, importer=None, quantity=None, quantity_unit=None,
+                 goods=None, claimed_rules=None, rounding="paisa", db_path=None) -> dict:
+    """Itemised duty bill with and without customs-duty concessions. See docs/tools.md.
+
+    The bill in `lines` / `totals` applies a concession ONLY if the caller lists its rule id (from `concessions.*.options[].rule_id`)
+    in claimed_rules. Otherwise it is the normal bill and every option carries `bill_if_applied` (totals and difference), so the
+    caller and the importer can see both. Conditions the tool cannot check are listed with each option.
+    """
+    base = _compute_core(code, assessable_value_pkr, as_of_date, importer, quantity, quantity_unit, goods, claimed_rules, rounding, db_path)
+    if base.get("status") not in ("computed", "needs_input", "cannot_compute") or "fy" not in base:
+        return base
+    conn = get_conn(db_path)
+    c = norm_code(code)
+    d = base["as_of_date"]
+    trow = _tariff_row(conn, base["fy"], c)
+    if trow is None:
+        return base
+    fifth = fifth_block(conn, c, d, trow)
+    fta = fta_block(conn, c, d, trow, goods)
+    options = fifth["options"] + fta["options"]
+    claimed_ids = {x for x in (claimed_rules or []) if str(x).startswith(("fifth_schedule_rules:", "fta_rules:"))}
+    valid_ids = {o["rule_id"] for o in options}
+    applied_opts = [o for o in options if o["rule_id"] in claimed_ids and o["_effective"] is not None]
+    unknown_claims = sorted(claimed_ids - valid_ids)
+    gate_notes = []
+    for o in list(applied_opts):
+        if o["kind"] == "CHINA_FTA" and not (fta["origin"] is True and fta["certificate"] is True):
+            applied_opts.remove(o)
+            gate_notes.append(f"{o['rule_id']} claimed but goods.origin_country is not China or goods.has_certificate_of_origin is not true: not applied.")
+
+    def run(o):
+        row = o["_row"]
+        cite = {"rule_id": o["rule_id"], "instrument": o["instrument"], "clause": o["clause"], "source_file": o["source_file"], "page": o["page"],
+                "valid_from": o["valid_from"], "valid_to": o["valid_to"], "status": o["status"], "rule_group": row.get("rule_group")}
+        ov = {"pct": o["_effective"], "label": f"{o['clause']}", "how": o["how"], "cite": cite, "row": row, "assumptions": []}
+        regimes = ()
+        if o["kind"] == "FIFTH_SCHEDULE" and o["acd_not_levied"]:
+            regimes = ("fifth_schedule",)
+            ov["assumptions"].append("FIFTH_ACD")
+        if o["kind"] == "CHINA_FTA":
+            ov["assumptions"].append("FTA_BASE")
+        return _compute_core(code, assessable_value_pkr, as_of_date, importer, quantity, quantity_unit, goods, claimed_rules, rounding, db_path,
+                             cd_override=ov, force_regimes=regimes)
+
+    alt_bills, shown = {}, 0
+    for o in options:
+        o["bill_if_applied"] = None
+        if o["_effective"] is None:
+            continue
+        if shown >= MAX_ALT_BILLS and o not in applied_opts:
+            o["bill_if_applied"] = {"note": f"not computed: only the first {MAX_ALT_BILLS} options get a full alternative bill"}
+            continue
+        shown += 1
+        alt = run(o)
+        alt_bills[o["rule_id"]] = alt
+        o["bill_if_applied"] = {**_bill_summary(alt), "difference_vs_normal_bill": _diff(base.get("totals"), alt.get("totals"))}
+
+    res = base
+    res["concessions"] = {
+        "applied": [],
+        "never_applied_silently": "A concession is applied only when its rule id is in claimed_rules. Otherwise it is only shown.",
+        "fifth_schedule": {k: ([public(o) for o in v] if k == "options" else v) for k, v in fifth.items()},
+        "china_fta": {k: ([public(o) for o in v] if k == "options" else v) for k, v in fta.items()},
+        "questions": _concession_questions(c, goods, fifth, fta, bool(fta["options"]), claimed_ids),
+        "notes": gate_notes + ([f"claimed rule id(s) {unknown_claims} are not options for this code and date: not applied."] if unknown_claims else []),
+    }
+    if len(applied_opts) > 1:
+        res["concessions"]["notes"].append("More than one customs-duty concession was claimed for the same goods; only one can set the customs duty. Nothing was applied: choose one.")
+        res["status"] = "needs_input"
+        res["missing_inputs"] = res.get("missing_inputs", []) + [{"field": "claimed_rules", "question": "Which ONE concession do you claim? " + ", ".join(o["rule_id"] for o in applied_opts),
+                                                                    "why": "Two customs-duty concessions cannot both set the customs duty of the same goods."}]
+        res["totals"] = None
+    elif len(applied_opts) == 1:
+        o = applied_opts[0]
+        alt = alt_bills[o["rule_id"]]
+        without = _bill_summary(base)
+        alt["concessions"] = res["concessions"]
+        alt["concessions"]["applied"] = [public(o) | {"applied_because": "listed in claimed_rules by the caller"}]
+        alt["concessions"]["bill_without_concession"] = {**without, "difference_this_bill_vs_without": _diff(base.get("totals"), alt.get("totals"))}
+        alt["notes"].append("Concession applied because the caller claimed it. Conditions not checked by the tool: " +
+                            ("; ".join(o["conditions_the_system_cannot_check"]) or "none printed"))
+        alt["review_required"] = True
+        alt["flags"] = list(alt.get("flags", [])) + [f"concession_applied_conditions_unchecked: {o['rule_id']}"]
+        res = alt
+    for o in options:
+        o.pop("_row", None)
+        o.pop("_effective", None)
     return res

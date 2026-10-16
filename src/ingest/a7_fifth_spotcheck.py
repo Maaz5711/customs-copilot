@@ -10,12 +10,13 @@ from pathlib import Path
 import pymupdf
 
 P = Path("data/processed")
-RAW = Path("data/raw/2026825118858478FifthSchedule2026-27.pdf")
+RAW_BY = {"": ("2026825118858478FifthSchedule2026-27.pdf", "fifth"), "_2025_26": ("202585238495687Fifth-Schedule.pdf", "fifth2025")}
 EVERY = {"I": 3, "II": 8, "III": 4, "VIII": 8}
 
 
-def main():
-    rules = list(csv.DictReader(open(P / "a7_fifth_rules.csv", encoding="utf-8")))
+def main(sfx=""):
+    pdf, imgdir = RAW_BY[sfx]
+    rules = list(csv.DictReader(open(P / f"a7_fifth_rules{sfx}.csv", encoding="utf-8")))
     counters, out = {}, []
     for r in rules:
         part = r["part"]
@@ -23,23 +24,24 @@ def main():
         pick = r["status"] == "needs_review" or part not in EVERY or counters[part] % EVERY[part] == 0
         if not pick:
             continue
-        img = f"data/processed/page_images/fifth/p{int(r['page']):02d}.png"
+        img = f"data/processed/page_images/{imgdir}/p{int(r['page']):02d}.png"
         parsed = (f"Part {r['part']} Table {r['table']} S.No {r['s_no']} {r['sub_ref']} | code {r['code_raw'] or '(none: named by description)'}"
                   f" | duty {r['rate_raw']} | conditions: {r['conditions'][:140]}")
         out.append(dict(rule_id=r["rule_id"], page=r["page"], part=r["part"], table=r["table"], s_no=r["s_no"],
                         description=r["description"][:160], parsed=parsed, issues=r["issues"], page_image=img,
                         **{"correct? (Y/N)": "", "true_value_if_N": ""}))
-    with open(P / "spotcheck_a7_fifth.csv", "w", encoding="utf-8", newline="") as f:
+    with open(P / f"spotcheck_a7_fifth{sfx}.csv", "w", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(out[0]))
         w.writeheader()
         w.writerows(out)
     pages = sorted({int(o["page"]) for o in out})
-    (P / "page_images" / "fifth").mkdir(parents=True, exist_ok=True)
-    doc = pymupdf.open(RAW)
+    (P / "page_images" / imgdir).mkdir(parents=True, exist_ok=True)
+    doc = pymupdf.open(Path("data/raw") / pdf)
     for pn in pages:
-        doc[pn - 1].get_pixmap(dpi=100).save(P / "page_images" / "fifth" / f"p{pn:02d}.png")
+        doc[pn - 1].get_pixmap(dpi=100).save(P / "page_images" / imgdir / f"p{pn:02d}.png")
     print(len(out), "of", len(rules), "rules in the sheet;", len(pages), "page images")
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    main(sys.argv[1] if len(sys.argv) > 1 else "")

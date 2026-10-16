@@ -24,10 +24,11 @@ def build(db_path=DEFAULT_DB_PATH) -> dict:
     report["fed_rules"] = load_table_file(conn, "fed_rules", PROC / "a6_fed_rules.csv")
     mapped = PROC / "a6_fed_rules_mapped.json"      # derived by src.ingest.a6_fed_mapping from a6_fed_mapping.csv (description match, owner has not verified)
     report["fed_rules_mapped"] = load_table_file(conn, "fed_rules", mapped) if mapped.exists() else 0
-    fifth = PROC / "a7_fifth_rules_store.json"      # a7_fifth_rules.csv mapped to the table contract (kept in git, auditable)
-    if (PROC / "a7_fifth_rules.csv").exists():
-        fifth.write_text(json.dumps(fifth_rows(), indent=1, ensure_ascii=False), encoding="utf-8")
-        report["fifth_schedule_rules"] = load_table_file(conn, "fifth_schedule_rules", fifth)
+    report["fifth_schedule_rules"] = 0
+    for csv_name, store_name in (("a7_fifth_rules.csv", "a7_fifth_rules_store.json"), ("a7_fifth_rules_2025_26.csv", "a7_fifth_rules_2025_26_store.json")):
+        if (PROC / csv_name).exists():      # mapped to the table contract; gitignored (rebuilt here), the CSV is the audited file
+            (PROC / store_name).write_text(json.dumps(fifth_rows(PROC / csv_name), indent=1, ensure_ascii=False), encoding="utf-8")
+            report["fifth_schedule_rules"] += load_table_file(conn, "fifth_schedule_rules", PROC / store_name)
     notes = PROC / "legal_notes_store.json"      # derived from legal_notes.json (A4), kept in git so the mapping is auditable
     notes.write_text(json.dumps(legal_notes_rows(), indent=1, ensure_ascii=False), encoding="utf-8")
     report["legal_notes"] = load_table_file(conn, "legal_notes", notes)

@@ -11,8 +11,7 @@ from collections import Counter, defaultdict
 
 import pymupdf
 
-from src.ingest.a7_fifth import (CODE8, PROC, RAW, SKIP_PAGES, ONLY_FIRST_BLOCK, SOURCE, VALID_FROM, VALID_TO, norm_codes,
-                                 parse_rate, read_all)
+from src.ingest.a7_fifth import CODE8, EDITIONS, PROC, RAW, norm_codes, parse_rate, read_all
 from src.ingest.pdf_grid import table_blocks
 
 SCOPE = {
@@ -94,7 +93,7 @@ def link_context(rows):
     return out
 
 
-def to_rules(rows):
+def to_rules(rows, ed):
     rules, n = [], 0
     for r in link_context(rows):
         kind, pcts, frac, note = parse_rate(r["rate_raw"])
@@ -127,7 +126,7 @@ def to_rules(rows):
             scope=SCOPE.get((r["part"], r["table"]), "other"), rate_raw=r["rate_raw"], rate_kind=kind,
             rate_pcts=json.dumps(pcts), rate_fraction_pct=frac or "", rate_note=note,
             conditions=r.get("conditions", ""), part_conditions_ref=PART_CONDITION_REF.get(r["part"], ""),
-            valid_from=VALID_FROM, valid_to=VALID_TO, source_file=SOURCE, page=r["page"], band_y=f'{r["y0"]}-{r["y1"]}',
+            valid_from=ed["valid_from"], valid_to=ed["valid_to"], source_file=ed["source"], page=r["page"], band_y=f'{r["y0"]}-{r["y1"]}',
             extraction_method="text layer + ruling-line cell grid (pdf_grid.py)",
         )
         for code, level in (list(zip(codes, levels)) or [("", "unmapped")]):
@@ -135,7 +134,7 @@ def to_rules(rows):
             these = list(issues) + list(info)
             if level == "unmapped":
                 these.append("named_by_description_only")
-            rules.append(dict(rule_id=f"A7F-{n:05d}", code_raw=r["pct_raw"], code_norm=code, match_level=level,
+            rules.append(dict(rule_id=f"{ed['id_prefix']}-{n:05d}", code_raw=r["pct_raw"], code_norm=code, match_level=level,
                               issues="; ".join(these), status="needs_review" if issues else "accepted", **common))
     return rules
 
@@ -152,7 +151,8 @@ def serial_key(s: str):
     return (int(m.group(1)), m.group(2).upper()) if m else (10**9, s)
 
 
-def validate(rows, rules):
+def validate(rows, rules, ed):
+    SKIP_PAGES, ONLY_FIRST_BLOCK, SOURCE = ed["skip_pages"], ed["only_first_block"], ed["source"]
     """Every finding is a row of the failures report; nothing is fixed silently."""
     fails = []
 
@@ -160,12 +160,14 @@ def validate(rows, rules):
         fails.append(dict(check=check, page=page, part=part, table=table, s_no=s_no, detail=detail))
 
     tc = tariff_codes()
+    ty = "FY2026-27" if ed["valid_from"] >= "2026-07-01" else "FY2025-26"
     for r in rules:
         lvl, c = r["match_level"], r["code_norm"]
-        if lvl == "code8" and c not in tc["FY2026-27"]:
-            note = "also not in FY2025-26 tariff" if c not in tc["FY2025-26"] else "exists in FY2025-26 tariff only"
-            add("code_not_in_tariff_2026_27", r["page"], r["part"], r["table"], r["s_no"], f"{c} ({note})")
-        elif lvl in ("code6", "heading4") and not any(t.startswith(c) for t in tc["FY2026-27"]):
+        if lvl == "code8" and c not in tc[ty]:
+            other = "FY2025-26" if ty == "FY2026-27" else "FY2026-27"
+            note = f"also not in {other} tariff" if c not in tc[other] else f"exists in {other} tariff only"
+            add(f"code_not_in_tariff_{ty[2:].replace('-','_')}", r["page"], r["part"], r["table"], r["s_no"], f"{c} ({note})")
+        elif lvl in ("code6", "heading4") and not any(t.startswith(c) for t in tc[ty]):
             add(f"{lvl}_matches_no_tariff_line", r["page"], r["part"], r["table"], r["s_no"], c)
     # serial continuity per (part, table)
     ser = defaultdict(list)
@@ -245,10 +247,12 @@ def validate(rows, rules):
     return fails
 
 
-def write_outputs():
-    rows = read_all()
-    rules = to_rules(rows)
-    fails = validate(rows, rules)
+def write_outputs(edition="2026_27"):
+    ed = EDITIONS[edition]
+    sfx = ed["suffix"]
+    rows = read_all(edition)
+    rules = to_rules(rows, ed)
+    fails = validate(rows, rules, ed)
     PROC.mkdir(exist_ok=True, parents=True)
 
     def dump(name, data, fields=None):
@@ -261,31 +265,32 @@ def write_outputs():
             json.dump(data, f, ensure_ascii=False, indent=1, default=str)
 
     flat = [{k: (json.dumps(v) if isinstance(v, (list, tuple, dict)) else v) for k, v in r.items() if not k.startswith("_")} for r in rows]
-    dump("a7_fifth_rows", flat)
+    dump("a7_fifth_rows" + sfx, flat)
     rf = ["rule_id", "part", "table", "s_no", "sub_ref", "description", "description2", "title", "group_context", "sub_items_text",
           "scope", "code_raw", "code_norm", "match_level", "rate_raw", "rate_kind", "rate_pcts", "rate_fraction_pct", "rate_note",
           "conditions", "part_conditions_ref", "valid_from", "valid_to", "source_file", "page", "band_y", "status", "issues",
           "extraction_method"]
-    dump("a7_fifth_rules", rules, rf)
+    dump("a7_fifth_rules" + sfx, rules, rf)
     agg = {}
     for fl in fails:
         k = (fl["check"], fl["page"], fl["part"], fl["table"], fl["s_no"], fl["detail"])
         agg.setdefault(k, dict(fl, count=0))["count"] += 1
-    with open(PROC / "a7_fifth_failures.csv", "w", encoding="utf-8", newline="") as f:
+    with open(PROC / f"a7_fifth_failures{sfx}.csv", "w", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["check", "page", "part", "table", "s_no", "detail", "count"])
         w.writeheader()
         w.writerows(agg.values())
     summary = {
-        "source": SOURCE, "valid_from": VALID_FROM, "rows_total": len(rows), "rules_total": len(rules),
+        "source": ed["source"], "valid_from": ed["valid_from"], "valid_to": ed["valid_to"], "validity_basis": ed["basis"], "rows_total": len(rows), "rules_total": len(rules),
         "rules_by_scope": dict(Counter(r["scope"] for r in rules)),
         "rules_by_match_level": dict(Counter(r["match_level"] for r in rules)),
         "rules_by_status": dict(Counter(r["status"] for r in rules)),
         "failures_by_check": dict(Counter(f["check"] for f in fails)),
     }
-    json.dump(summary, open(PROC / "a7_fifth_validation.json", "w", encoding="utf-8"), indent=1)
+    json.dump(summary, open(PROC / f"a7_fifth_validation{sfx}.json", "w", encoding="utf-8"), indent=1)
     return rows, rules, fails, summary
 
 
 if __name__ == "__main__":
-    _, _, _, summary = write_outputs()
+    import sys
+    _, _, _, summary = write_outputs(sys.argv[1] if len(sys.argv) > 1 else "2026_27")
     print(json.dumps(summary, indent=1))
