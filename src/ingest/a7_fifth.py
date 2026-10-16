@@ -25,9 +25,28 @@ SOURCE = "2026825118858478FifthSchedule2026-27.pdf"
 VALID_FROM = "2026-07-01"
 VALID_TO = "9999-12-31"
 
-# page 22 and the lower blocks of page 21 are the Annex forms (Annex-A/B), not concession rows
+# Annex forms (Annex-A/B) printed inside the schedule are not concession rows: pages / lower blocks to skip per edition.
+EDITIONS = {
+    "2026_27": dict(source=SOURCE, valid_from=VALID_FROM, valid_to=VALID_TO, skip_pages={22}, only_first_block={21}, suffix="", id_prefix="A7F",
+                    basis="Finance Act 2026 s.3(14), 'Updated 30th June, 2026' (printed on page 1)"),
+    "2025_26": dict(source="202585238495687Fifth-Schedule.pdf", valid_from="2025-07-01", valid_to="2026-06-30", skip_pages={41},
+                    only_first_block={40}, suffix="_2025_26", id_prefix="A7F25",
+                    basis="file listed by FBR on its Customs Tariff page as the FY2025-26 Fifth Schedule (told by the main session; the file prints no date)"),
+}
 SKIP_PAGES = {22}
 ONLY_FIRST_BLOCK = {21}
+
+
+def normalize_part1_xs(xs):
+    """Drop nested numbering columns of Part I (a sub-column inside Description, a split of the duty/condition column)."""
+    kept = []
+    for i, x in enumerate(xs):
+        if 0 < i < len(xs) - 1 and i != 1 and kept and x - kept[-1] < 40:
+            continue
+        if 1 < i < len(xs) - 1 and kept and i == len(xs) - 2 and xs[-1] - x < 15:
+            continue
+        kept.append(x)
+    return kept
 
 HEAD_PART = re.compile(r"^Part[- ]\s*([IVX]+)\s*(?:\(\s*([A-C])\s*\))?(?![A-Za-z])")
 HEAD_TABLE_ABC = re.compile(r"^Table\s+([A-E])\s*$")
@@ -132,18 +151,20 @@ def parse_rate(raw: str):
     return "other", nums if re.match(r"^\d+(?:\.\d+)?\s*%", t) else [], None, t
 
 
-def build_rows(pdf_path: Path):
+def build_rows(pdf_path: Path, ed=None):
+    ed = ed or EDITIONS["2026_27"]
+    skip_pages, only_first = ed["skip_pages"], ed["only_first_block"]
     doc = pymupdf.open(pdf_path)
     rows = []
     state = {"part": "I", "table": "main"}
     carry_sno = ""
     for pno in range(2, len(doc) + 1):
         page = doc[pno - 1]
-        if pno in SKIP_PAGES:
+        if pno in skip_pages:
             continue
         events = sorted(heading_events(page))
         blocks = table_blocks(page)
-        if pno in ONLY_FIRST_BLOCK:
+        if pno in only_first:
             blocks = blocks[:1]
         words = page.get_text("words")
         for bi, blk in enumerate(blocks):
@@ -151,8 +172,8 @@ def build_rows(pdf_path: Path):
                 if y < blk["y0"]:
                     state = {"part": val, "table": "main"} if kind == "part" else {"part": state["part"], "table": val}
             xs = list(blk["xs"])
-            if state["part"] == "I" and len(xs) == 7:  # nested numbering column inside Description (p19-21)
-                xs = [x for x in xs if not (110 < x < 135)]
+            if state["part"] == "I":
+                xs = normalize_part1_xs(xs)
             try:
                 roles = roles_for(state["part"], state["table"], len(xs) - 1)
             except ValueError as e:
@@ -353,8 +374,9 @@ def classify(r):
     return "empty"
 
 
-def read_all():
-    rows = finalize(build_rows(RAW / SOURCE))
+def read_all(edition="2026_27"):
+    ed = EDITIONS[edition]
+    rows = finalize(build_rows(RAW / ed["source"], ed))
     for r in rows:
         r["row_kind"] = r.get("row_kind") or classify(r)
     return rows

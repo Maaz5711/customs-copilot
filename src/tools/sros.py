@@ -4,6 +4,7 @@ from __future__ import annotations
 from ._util import (
     collect, coverage, excluded_view, get_conn, group_rows, norm_code, rows, rule_view, sros_of_kind, to_iso,
 )
+from .concessions import fifth_block, fta_block, public
 from .fed import fed_block
 from .lookup import lookup_code
 from .rules import acd_kind, income_tax_class, make_acd_prefilter, make_st_prefilter, st_benign_condition
@@ -74,9 +75,15 @@ def get_applicable_sros(code, as_of_date, db_path=None) -> dict:
     # federal excise duty (First Schedule Table I / IA applicable to imports; Third Schedule exemptions listed, never applied)
     out["fed"] = fed_block(conn, c, d)
 
+    fifth = fifth_block(conn, c, d, trow)
+    fta = fta_block(conn, c, d, trow, None)
     out["concessions"] = {
         "applicable": [],
-        "note": "Customs concessions are not in the dated store. The only concession rows read (A3) are the sugar SROs 1215/1834 and Early Harvest SRO 1386(I)/2025; they name no PCT code and are out of v1 duty scope.",
+        "fifth_schedule": {k: ([public(o) for o in v] if k == "options" else v) for k, v in fifth.items()},
+        "china_fta": {k: ([public(o) for o in v] if k == "options" else v) for k, v in fta.items()},
+        "note": ("Customs-duty concessions are OFFERS, never applied here: the Fifth Schedule (valid from 1 Jul 2026) and the China-Pakistan FTA Phase II "
+                 "(SRO 1640(I)/2019, needs Chinese origin and a Form E certificate). compute_duty shows the bill with and without each option. "
+                 "Other concession SROs (sugar 1215/1834, Early Harvest 1386(I)/2025) name no PCT code and are not matched by code; other FTAs/PTAs are not in the store."),
     }
     flags = []
     if c.startswith("1701"):
