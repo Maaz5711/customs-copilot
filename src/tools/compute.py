@@ -181,6 +181,29 @@ def _no_entry_line(conn, kind, d, table_label, excluded):
     return cite, note
 
 
+# Single source of truth: which total each bill line belongs to. EVERY tax code a bill line can carry must be listed here.
+# compute_duty (totals) and the agent's arithmetic check both use total_buckets(), and tests/test_tools.py guards the list, so adding a tax in one
+# place can no longer silently break the other.
+TAX_TOTAL_BUCKET = {
+    "CD": "customs_duties", "RD": "customs_duties", "RD_USED_VEHICLE": "customs_duties", "ACD": "customs_duties",
+    "FED": "federal_excise_duty", "SED": "federal_excise_duty",
+    "ST": "sales_tax", "VAT": "sales_tax", "FURTHER_TAX": "sales_tax",
+    "IT": "income_tax",
+}
+BUCKETS = ("customs_duties", "federal_excise_duty", "sales_tax", "income_tax")
+
+
+def total_buckets(lines) -> dict:
+    """Sum the amounts of bill lines into the four totals. A line with an unknown tax code is a programming error, so it raises instead of being dropped."""
+    out = {k: Decimal(0) for k in BUCKETS}
+    for ln in lines:
+        try:
+            out[TAX_TOTAL_BUCKET[ln["tax"]]] += Decimal(str(ln["amount_pkr"]))
+        except KeyError:
+            raise ValueError(f"tax code {ln['tax']!r} has no total bucket; add it to TAX_TOTAL_BUCKET in src/tools/compute.py") from None
+    return out
+
+
 def _compute_core(code, assessable_value_pkr, as_of_date, importer=None, quantity=None, quantity_unit=None,
                   goods=None, claimed_rules=None, rounding="paisa", db_path=None, cd_override=None, force_regimes=()) -> dict:
     """Itemised duty bill (one scenario). `cd_override` replaces the tariff CD by a concession (set only by compute_duty).
@@ -625,17 +648,7 @@ def _compute_core(code, assessable_value_pkr, as_of_date, importer=None, quantit
         "rounding": {"mode": rounding, "rule": ASSUME_TEXT["ROUNDING"]},
     }
     if status == "computed":
-        tot = {k: Decimal(0) for k in ("customs_duties", "federal_excise_duty", "sales_tax", "income_tax")}
-        for ln in bill.lines:
-            a = D(ln["amount_pkr"])
-            if ln["tax"] in ("CD", "RD", "RD_USED_VEHICLE", "ACD"):
-                tot["customs_duties"] += a
-            elif ln["tax"] in ("FED", "SED"):
-                tot["federal_excise_duty"] += a
-            elif ln["tax"] in ("ST", "VAT", "FURTHER_TAX"):
-                tot["sales_tax"] += a
-            elif ln["tax"] == "IT":
-                tot["income_tax"] += a
+        tot = total_buckets(bill.lines)
         total = sum(tot.values())
         res["totals"] = {**{k: fmt(v, 2) for k, v in tot.items()}, "total_payable_pkr": fmt(total, 2)}
         if bill.optional:

@@ -17,6 +17,8 @@ from typing import Annotated, Any, Callable, TypedDict
 
 from langgraph.types import interrupt
 
+from src.tools.compute import total_buckets
+
 from . import prompts
 from .facts import apply_value, coerce, spec_for, tool_args
 from .ground import Corpus, check_text, clean_llm_text
@@ -771,17 +773,7 @@ def bill_checks(duty: dict | None, lookup: dict | None, date_iso: str) -> tuple[
         issues.append("a bill line has no complete citation (instrument, clause, file, page, dates)")
     if duty["status"] == "computed":
         tot = duty["totals"]
-        s = {"customs_duties": Decimal(0), "federal_excise_duty": Decimal(0), "sales_tax": Decimal(0), "income_tax": Decimal(0)}
-        for ln in lines:
-            a = Decimal(ln["amount_pkr"])
-            if ln["tax"] in ("CD", "RD", "RD_USED_VEHICLE", "ACD"):
-                s["customs_duties"] += a
-            elif ln["tax"] in ("FED", "SED"):
-                s["federal_excise_duty"] += a
-            elif ln["tax"] in ("ST", "VAT", "FURTHER_TAX"):
-                s["sales_tax"] += a
-            elif ln["tax"] == "IT":
-                s["income_tax"] += a
+        s = total_buckets(lines)
         ok = all(Decimal(tot[k]) == v for k, v in s.items()) and Decimal(tot["total_payable_pkr"]) == sum(s.values())
         checks["bill_arithmetic"] = ok
         if not ok:

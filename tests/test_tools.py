@@ -425,3 +425,20 @@ def test_non_filer_rule_cites_the_file_valid_on_the_date():
     r = compute_duty("6109.1000", 1000000, "2025-12-01", importer={**IMP, "active_taxpayer": False})
     it = next(ln for ln in r["lines"] if ln["tax"] == "IT")
     assert it["atl_rule"]["page"] == 780 and "20.02.2026" in it["atl_rule"]["source_file"]
+
+
+# ===================================================================== single source of truth for the totals
+def test_every_tax_code_a_bill_line_can_carry_has_a_total_bucket():
+    import re
+    from pathlib import Path
+
+    from src.tools.compute import TAX_TOTAL_BUCKET, total_buckets
+
+    src = Path("src/tools/compute.py").read_text(encoding="utf-8")
+    emitted = set(re.findall(r'_line\(bill, "([A-Z_]+)"', src)) | {"FED", "SED"}       # FED / SED lines are written by the excise helper
+    assert emitted <= set(TAX_TOTAL_BUCKET), emitted - set(TAX_TOTAL_BUCKET)
+    import pytest as _pt
+
+    with _pt.raises(ValueError, match="no total bucket"):
+        total_buckets([{"tax": "NEW_TAX", "amount_pkr": "1.00"}])
+    assert total_buckets([{"tax": "CD", "amount_pkr": "1.50"}, {"tax": "FURTHER_TAX", "amount_pkr": "2.00"}])["sales_tax"] == D("2.00")
