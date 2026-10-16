@@ -29,5 +29,12 @@ Rules: never commit the raw file or any identity column (NTN, importer, consigne
 * **Income-tax base.** Some lines show 6.35%, 6.48% or 5.82% of our base, so Customs used a slightly larger base (possibly a notified minimum value, s.148(6A)). Not yet explained.
 * **Regulatory duty differences** on a few lines (24 of 1,500): not yet analysed.
 
+## 4b. How noisy are the declared codes? (measured from the file itself, no human review)
+For descriptions typed identically (after removing numbering, weights and quantities) by at least two different importers: 353 descriptions, 1,646 lines (11% of lines; the rest of the 10,096 distinct descriptions are used once).
+* All importers used the **same 8-digit code for 72%** of these descriptions, the same 6-digit code for 76%, the same 4-digit heading for 95%.
+* So at the exact Pakistan line, importers disagree with each other for about 28% of the *same* product words (mostly choosing between neighbouring national lines, for example "other" against a specific line). At most one of two disagreeing declarations can be right.
+* If a system always picked the majority code for such a description it would match the declared code on only about 91% of those lines. Matching declared labels exactly therefore has a ceiling well below 100% on the exact line, and a measured 42% for the full agent is not as low as it first looks. It is still a lower bound against the truth, because declared codes include genuine mistakes.
+* No importer, NTN or GD number is stored in this analysis; it ran in memory over the private file.
+
 ## 5. Limits
 Chapter 85 only (electronics and electrical goods), one month, one importer's shipments (many importers and 5,484 GDs, but the file is one source). Declared codes are not verified. The importer facts used for the duty check are inferred, not known.
