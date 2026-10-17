@@ -41,14 +41,28 @@ def load_results(system: str, out: Path = OUT) -> dict[str, dict]:
     return rows
 
 
-def _save(system: str, rec: dict, out: Path) -> None:
+def _write_all(system: str, rows: dict, out: Path) -> None:
+    """Write all results of one system in one go (temp file, then replace). OneDrive or an antivirus can hold the file for a moment on Windows, so the
+    replace is retried and, as a last resort, the file is written in place."""
     out.mkdir(parents=True, exist_ok=True)
+    text = "\n".join(json.dumps(r, ensure_ascii=False) for r in rows.values()) + "\n"
+    path = results_path(system, out)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    for attempt in range(6):
+        try:
+            tmp.replace(path)
+            return
+        except PermissionError:
+            time.sleep(0.5 * (attempt + 1))
+    path.write_text(text, encoding="utf-8")
+    tmp.unlink(missing_ok=True)
+
+
+def _save(system: str, rec: dict, out: Path) -> None:
     rows = load_results(system, out)
     rows[rec["case_id"]] = rec
-    tmp = results_path(system, out).with_suffix(".tmp")
-    tmp.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows.values()) + "\n", encoding="utf-8")
-    tmp.replace(results_path(system, out))
-
+    _write_all(system, rows, out)
 
 
 def merge_results(dirs, out: Path = OUT) -> int:
@@ -61,8 +75,8 @@ def merge_results(dirs, out: Path = OUT) -> int:
                 if cid not in merged:
                     merged[cid] = rec
                     added += 1
-        for rec in merged.values():
-            _save(system, rec, out)
+        if merged:
+            _write_all(system, merged, out)
     return added
 
 
