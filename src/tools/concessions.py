@@ -18,7 +18,7 @@ CAPITAL_GOODS_CHAPTERS = ("84", "85", "90")
 BORDER_MARKET_SCOPE = "border_markets"
 FIFTH_INSTRUMENT = "Fifth Schedule to the Customs Act 1969 (substituted by Finance Act 2026 s.3(14), from 1 Jul 2026)"
 FIFTH_INSTRUMENT_2025 = "Fifth Schedule to the Customs Act 1969 (FY2025-26 version, FBR file)"
-FTA_INSTRUMENT = "SRO 1640(I)/2019 (China-Pakistan FTA Phase II)"
+FTA_INSTRUMENT = "SRO 1640(I)/2019 (China-Pakistan FTA Phase II), Table substituted by SRO 1181(I)/2022"
 ORIGIN_CN = {"cn", "chn", "china", "prc", "people's republic of china", "peoples republic of china"}
 
 
@@ -235,7 +235,7 @@ def fta_block(conn, c: str, d: str, trow: dict, goods: dict | None) -> dict:
         }
         out["options"].append(o)
     if not out["options"]:
-        out["notes"].append("No SRO 1640(I)/2019 row for this code on this date (the code may not be in the 2019 table, or it was renumbered: OQ-A8-1).")
+        out["notes"].append("No SRO 1640(I)/2019 (as substituted by SRO 1181(I)/2022) row for this code on this date (the code may not be in the table substituted by SRO 1181(I)/2022, or its row could not be read).")
         # Neighbouring lines of the same 6-digit family, shown as INFORMATION only. Tested against real assessed duties (importer GD extract, Feb 2026, 1,162 China FTA
         # lines whose code is missing from the table): a single-rate family gave the charged duty on 136 of 182 lines (75%), a multi-rate family on about half,
         # so the rate is never offered or applied; the importer is told to ask the clearing agent.

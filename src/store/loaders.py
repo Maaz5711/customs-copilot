@@ -61,7 +61,7 @@ SRO_FACTS = [
          valid_from="2020-01-01", valid_to=OPEN_END,
          source_file="2020111213219376SRO1640(I)2019dated31.12.2019.pdf", page=1,
          note="China-Pakistan FTA Phase II: 'with effect from the first day of January, 2020' (page 1, AI reading of the scan). No end date printed. "
-              "Amendments to this SRO are not in data/raw (OQ-A8-1), so the SRO is read as issued. Rates per calendar year are in fta_rules."),
+              "FBR lists three amendments: 574(I)/2020, 905(I)/2021 and 1181(I)/2022. SRO 1181(I)/2022 (27-28 Jul 2022) substitutes the whole Table with HS 2022 codes, so the rates in fta_rules are read from that table (source_file of each row); the 2019 reading is only a flagged fallback. Rates per calendar year are in fta_rules."),
 ]
 # superseded_by is derived from `supersedes` at load time.
 
