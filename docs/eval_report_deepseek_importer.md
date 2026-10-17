@@ -10,7 +10,7 @@ LLM used for every system in this report: **deepseek** (results in `data\process
 |---|---|---|---|---|
 | plain_llm | 0 | 0 | 150 | 0 |
 | llm_rag | 0 | 0 | 150 | 0 |
-| full_graph | 0 | 0 | 276 | 1 |
+| full_graph | 0 | 0 | 960 | 1 |
 | full_graph_assisted | 0 | 0 | 0 | 0 |
 | tariffai | 0 | 0 | 0 | 0 |
 
