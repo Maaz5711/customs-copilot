@@ -74,17 +74,41 @@ def tariff_codes() -> dict[str, set[str]]:
     return out
 
 
+def in_order_rows(codes: list[str]) -> set[int]:
+    """Indices of the longest strictly rising run of codes. The SRO prints codes in ascending order, so a row outside this run is misplaced
+    (a misprinted code, for example 8507.8000 printed where 8507.4000 belongs) and is the one to distrust, not its neighbours."""
+    import bisect
+
+    tails, tail_idx, prev = [], [], [-1] * len(codes)
+    for i, c in enumerate(codes):
+        k = bisect.bisect_left(tails, c)
+        if k == len(tails):
+            tails.append(c)
+            tail_idx.append(i)
+        else:
+            tails[k], tail_idx[k] = c, i
+        prev[i] = tail_idx[k - 1] if k else -1
+    keep, i = set(), tail_idx[-1] if tail_idx else -1
+    while i >= 0:
+        keep.add(i)
+        i = prev[i]
+    return keep
+
+
 def build():
     rows, fails = [], []
     tc = tariff_codes()
-    prev_sr, prev_code = 0, ""
-    for r in raw_rows():
+    raws = list(raw_rows())
+    good = in_order_rows([r["code"] for r in raws])
+    good_codes = {raws[i]["code"] for i in good}
+    prev_sr = 0
+    for n, r in enumerate(raws):
         issues = []
         if r["sr_no"] != prev_sr + 1:
             issues.append(f"srno_jump_{prev_sr}_to_{r['sr_no']}")
-        if prev_code and r["code"] <= prev_code:
-            issues.append("code_not_ascending")
-        prev_sr, prev_code = r["sr_no"], r["code"]
+        prev_sr = r["sr_no"]
+        if n not in good:
+            issues.append("code_out_of_order")
         vals = [None] * r["no_exemption"] + r["values"]
         status, pattern, f = "accepted", "unfitted", None
         if r["specific"]:
@@ -104,7 +128,10 @@ def build():
                 vals = f["values"]            # equal to the printed values where they were read; fills a year that printed 'no exemption'
                 if r["no_exemption"]:
                     issues.append(f"no_exemption_printed_for_first_{r['no_exemption']}_years")
-        if "code_not_ascending" in issues or any(x.startswith("srno_jump") for x in issues):
+        if "code_out_of_order" in issues and r["code"] in good_codes:
+            status = "rejected"                     # the same code is printed again in its proper place: this row is a misprint, never used
+            issues.append("misprinted_duplicate_of_an_in_order_row")
+        elif "code_out_of_order" in issues or any(x.startswith("srno_jump") for x in issues):
             if status == "accepted":
                 status = "needs_review"
         c = r["code"]
@@ -143,7 +170,8 @@ def final_rules(rows, lines):
     """Rules the store loads: the 2022 table, plus (flagged, needs_review) the 2019 reading for codes whose 2022 row could not be read
     (status 'rejected', not the specific-duty rows). The 2019 reading and the 2022 table agree on 5,698 of 5,700 shared codes for 2025-2027,
     so the fallback is reasonable, but it is not the current legal text and is marked as such."""
-    bad = {r["code"] for r in rows if r["status"] == "rejected"}
+    usable = {r["code"] for r in rows if r["status"] in ("accepted", "needs_review")}
+    bad = {r["code"] for r in rows if r["status"] == "rejected"} - usable        # no usable 2022 row for the code (a misprinted duplicate does not count)
     out = list(lines)
     old_path = PROC / "a8_cpfta_rules.csv"
     if old_path.exists() and bad:
