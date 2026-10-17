@@ -102,3 +102,9 @@ def test_missing_key_message_and_registry(tmp_path, monkeypatch):
     assert isinstance(make_llm("deepseek", api_key="x", cache_dir=tmp_path), DeepSeekLLM)
     with pytest.raises(ValueError):
         DeepSeekLLM(api_key="x", thinking="maybe")
+
+
+def test_tokens_served_from_the_providers_prefix_cache_are_counted(tmp_path):
+    llm, _ = make(tmp_path, Resp(usage={"prompt_tokens": 1000, "completion_tokens": 20, "prompt_cache_hit_tokens": 640}))
+    llm.complete_json(task="t", system="sys", prompt="p")
+    assert llm.stats["tokens_in"] == 1000 and llm.stats["tokens_in_cached"] == 640
