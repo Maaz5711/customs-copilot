@@ -36,5 +36,18 @@ For descriptions typed identically (after removing numbering, weights and quanti
 * If a system always picked the majority code for such a description it would match the declared code on only about 91% of those lines. Matching declared labels exactly therefore has a ceiling well below 100% on the exact line, and a measured 42% for the full agent is not as low as it first looks. It is still a lower bound against the truth, because declared codes include genuine mistakes.
 * No importer, NTN or GD number is stored in this analysis; it ran in memory over the private file.
 
+## 4c. Classification results on real cleared GD lines (DeepSeek flash, thinking on for Classify; 2026-10-16/17)
+Exact Pakistan 8-digit line, top-1, against the DECLARED code (so a lower bound; declared codes contain mistakes and importers disagree with each other, section 4b):
+| System | Cases | Heading (4-digit) | Exact line top-1 | Right line in top 3 |
+|---|---|---|---|---|
+| Plain LLM | 150 | 58% | 17/150 (11%, CI 7-17) | 13% |
+| LLM with search | 150 | 45% | 36/150 (24%, CI 18-31) | 30% |
+| **Full agent** | 150 (first slice) | 71% | 63/150 (42%, CI 34-50) | 57% |
+| **Full agent** | **276 (first slice plus 126 new)** | n/a | **121/276 (44%, CI 38-50)** | n/a |
+The run on the remaining cases stopped when the DeepSeek balance reached zero (HTTP 402); the 276 cases are saved and the runner resumes with `--skip-done-in`. Baselines were not re-run on the new cases (the gap at 150 cases is large and the intervals do not overlap).
+* **Consensus subset is too small to use.** Only 32 of the 960 cases have a label that two or more importers agree on (25 are conflicted, 903 appear for one importer only), because cases were de-duplicated to unique descriptions. Full agent on the 9 consensus cases it ran: 6/9; far too few to conclude anything. `src/eval/gd_consensus.py` computes the status in memory (no identity stored).
+* **The blind AI second reader is NOT reliable enough to use.** Calibrated on 52 pairs where the true code is known (real Committee cases against the agent's wrong answer, order randomised, wording and notes supplied): it picked the true code 27/52 (52%, CI 39-65), the agent's wrong code 22/52, 'both' 1, 'neither' 2; no better than a coin flip, so its verdicts on the importer data are not used. Module kept (`src/eval/adjudicate.py`, tested) in case a better judge or better evidence is added.
+* **Where the agent misses** (first 150): right line among candidates but not first 22; right heading wrong sub-heading 27; wrong heading 26; right 6 digits wrong line 7; no candidate or crash 6. Some 'wrong heading' misses look like questionable declared codes (fuse up to 1,000 V declared as fuse above 1,000 V; relay declared under photosensitive devices).
+
 ## 5. Limits
 Chapter 85 only (electronics and electrical goods), one month, one importer's shipments (many importers and 5,484 GDs, but the file is one source). Declared codes are not verified. The importer facts used for the duty check are inferred, not known.

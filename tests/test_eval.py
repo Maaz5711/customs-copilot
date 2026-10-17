@@ -161,3 +161,23 @@ def test_cases_finished_in_another_folder_are_skipped(tmp_path):
     llm = FakeLLM(dict(seq))
     r = run(["plain_llm"], cases, llm, tmp_path / "new", skip_dirs=[done], log=lambda *_: None)
     assert r["done"] == 1 and r["skipped"] == 1 and llm.count("eval_plain") == 1
+
+
+def test_results_file_survives_a_locked_replace(tmp_path, monkeypatch):
+    """OneDrive can lock the file for a moment: the replace is retried, then written in place. Nothing is lost."""
+    from pathlib import Path as P
+
+    from src.eval import run as runmod
+
+    real = P.replace
+    calls = {"n": 0}
+
+    def flaky(self, target):
+        calls["n"] += 1
+        raise PermissionError("locked")
+
+    monkeypatch.setattr(P, "replace", flaky)
+    monkeypatch.setattr(runmod.time, "sleep", lambda s: None)
+    runmod._write_all("plain_llm", {"A": {"case_id": "A", "pred": {"behavior": "answer", "codes": []}}}, tmp_path)
+    monkeypatch.setattr(P, "replace", real)
+    assert calls["n"] == 6 and set(load_results("plain_llm", tmp_path)) == {"A"}
