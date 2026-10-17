@@ -77,7 +77,10 @@ def run(n: int = 1500, seed: int = 11) -> list[dict]:
             actual = Decimal(str(num(r[colname]) + (num(r["GST"]) if tax == "VAT" else 0)))
             ours = lines.get(tax, Decimal(0)) if res["status"] == "computed" else None
             row[f"act_{tax}"], row[f"our_{tax}"] = int(actual), (None if ours is None else int(ours))
-            if ours is not None and abs(actual - ours) > max(TOL, REL * actual):
+            # unregistered importers: the extra sales-tax amount is modelled as 7/18 of the sales tax; real lines run from 0.386 to 0.40 of it (docs/gd_findings.md 4d),
+            # i.e. up to about 3% of that amount and 1.5% of the income tax built on it, so those two taxes get a wider tolerance on such lines.
+            rel = {"VAT": Decimal("0.04"), "IT": Decimal("0.015")}.get(tax, REL) if row.get("unreg") else REL
+            if ours is not None and abs(actual - ours) > max(TOL, rel * actual):
                 diffs.append(tax)
         row["diffs"] = ",".join(diffs)
         out.append(row)

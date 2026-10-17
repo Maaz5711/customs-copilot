@@ -442,3 +442,43 @@ def test_every_tax_code_a_bill_line_can_carry_has_a_total_bucket():
     with _pt.raises(ValueError, match="no total bucket"):
         total_buckets([{"tax": "NEW_TAX", "amount_pkr": "1.00"}])
     assert total_buckets([{"tax": "CD", "amount_pkr": "1.50"}, {"tax": "FURTHER_TAX", "amount_pkr": "2.00"}])["sales_tax"] == D("2.00")
+
+
+def test_unregistered_importer_at_a_non_standard_sales_tax_rate_pays_the_observed_extra():
+    # 5701.1020 (rugs) is taxed at 25% (WeBOC and the Eighth Schedule agree). Real assessed GDs: for unregistered importers Customs collected 0.39 x the sales tax as an extra amount
+    # (7/18 here), of which the 3% value addition tax is already its own line. The rest is the FURTHER_TAX line, flagged as observed.
+    imp = {**IMP, "registration_status": "unregistered"}
+    res = compute_duty("5701.1020", 1000000, "2026-10-16", importer=imp)
+    assert res["status"] == "computed"
+    lines = {ln["tax"]: ln for ln in res["lines"]}
+    st, vat, ft = D(lines["ST"]["amount_pkr"]), D(lines["VAT"]["amount_pkr"]), lines["FURTHER_TAX"]
+    assert lines["ST"]["rate"]["pct"] == "25" and ft["included_in_total"] is True
+    assert D(ft["amount_pkr"]) == (st * 7 / 18).quantize(D("0.01"), rounding=ROUND_HALF_UP) - vat
+    assert "OPEN4_OBSERVED" in {a["id"] for a in res["assumptions"]}
+    reg = compute_duty("5701.1020", 1000000, "2026-10-16", importer=IMP)
+    assert "FURTHER_TAX" not in amounts(reg)
+
+
+def test_manufacturer_importing_part_iii_goods_is_told_about_the_part_ii_raw_material_rule_but_it_is_not_applied():
+    imp = {"registration_status": "registered", "commercial_importer": False, "manufacturer_in_house_use": True, "active_taxpayer": True}
+    res = compute_duty("8544.4290", 1000000, "2026-02-10", importer=imp, goods={"plant_machinery_for_manufacturing": False})
+    assert res["status"] == "computed"
+    it = next(ln for ln in res["lines"] if ln["tax"] == "IT")
+    assert it["rate"]["pct"] == "5.5"                                            # Part III, not commercial: the normal bill is unchanged
+    poss = [p for p in res["possible_rules_not_applied"] if "second proviso" in p.get("clause", "")]
+    assert len(poss) == 1 and poss[0]["alternative_rate_pct"] == "2" and "confirm with your clearing agent" in poss[0]["condition"]
+    non_mfr = compute_duty("8544.4290", 1000000, "2026-02-10", importer={**imp, "manufacturer_in_house_use": False}, goods={"plant_machinery_for_manufacturing": False})
+    assert not [p for p in non_mfr["possible_rules_not_applied"] if "second proviso" in p.get("clause", "")]
+
+
+def test_codes_with_an_unexplained_observed_acd_get_a_warning_and_an_unchanged_bill():
+    imp = {"registration_status": "registered", "commercial_importer": True, "manufacturer_in_house_use": False, "active_taxpayer": True}
+    res = compute_duty("8512.2010", 1000000, "2026-02-10", importer=imp, goods={"plant_machinery_for_manufacturing": False})
+    assert res["status"] == "computed"
+    acd = next(ln for ln in res["lines"] if ln["tax"] == "ACD")
+    assert acd["rate"]["pct"] == "6"                                              # the notifications as printed (SRO 1151 slab 30% and higher)
+    poss = [p for p in res["possible_rules_not_applied"] if "additional customs duty 11%" in p.get("clause", "")]
+    assert len(poss) == 1 and poss[0]["alternative_rate_pct"] == "11" and "Confirm with your clearing agent" in poss[0]["condition"]
+    assert any(f.startswith("observed_acd_11pct") for f in res["flags"])
+    other = compute_duty("8506.1000", 1000000, "2026-02-10", importer=imp, goods={"plant_machinery_for_manufacturing": False})
+    assert not [p for p in other.get("possible_rules_not_applied", []) if "additional customs duty 11%" in p.get("clause", "")]
