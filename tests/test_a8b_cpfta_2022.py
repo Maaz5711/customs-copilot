@@ -43,4 +43,11 @@ def test_no_exemption_years_are_counted_not_guessed(built):
 def test_serials_are_continuous_for_almost_all_rows(built):
     _, rows = built
     assert len(rows) > 6800 and sum(1 for r in rows if r["status"] == "accepted") > 6500
-    assert not any(r["status"] == "accepted" and "code_not_ascending" in r["issues"] for r in rows)
+    assert not any(r["status"] == "accepted" and "code_out_of_order" in r["issues"] for r in rows)
+
+
+def test_a_misprinted_code_row_is_rejected_and_the_in_order_row_is_used(built):
+    _, rows = built
+    sixes = [r for r in rows if r["code"] == "85078000"]          # sr 5888 prints 8507.8000 between 8507.3000 and 8507.5000 (a misprint); sr 5891 is the real line
+    assert {r["sr_no"]: r["status"] for r in sixes}[5888] == "rejected" and {r["sr_no"]: r["status"] for r in sixes}[5891] == "accepted"
+    assert [r["year_7"] for r in sixes if r["sr_no"] == 5891] == ["3.33"]
