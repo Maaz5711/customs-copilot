@@ -62,7 +62,13 @@ Customs Copilot (Pakistan): an agent that picks the 8-digit PCT code and compute
 ## Status 2026-10-16 evening
 * Concessions (Fifth Schedule both years, China FTA SRO 1640(I)/2019) built, committed, 457 tests pass. Agent asks origin and claim questions, shows both bills. Real-data check: docs/gd_concession_check.md (China FTA 98.4% match where the code is in the 2019 table; 21% of FTA lines carry HS 2022 codes missing from it: amendments to SRO 1640 are not in data/raw, OQ-A8-1).
 * Further tax for unregistered importers (4% at the 18% rate) is now added and included in the income-tax base (real assessed GDs, docs/gd_findings.md); non-filer income tax doubled (Tenth Schedule rule 1).
-* PENDING (paid, off-peak only, see memory): importer classification run `python -m src.eval.run --llm deepseek --tag importer --kinds importer --sample 150 --seed 3 --classify-thinking enabled --systems plain_llm llm_rag full_graph --max-llm-calls 900` (resumable; started again 2026-10-16 15:10 UTC). Then `python -m src.eval.run --llm deepseek --tag importer --report`.
+* Importer classification (DeepSeek flash): 150 cases for all three systems (11% / 24% / 42% exact line) and the full agent on 276 cases (44%). Stopped: DeepSeek balance is $0 (HTTP 402). Resume only after a top-up, off-peak: three shards `python -m src.eval.run --llm deepseek --tag importer_s{i} --kinds importer --classify-thinking enabled --systems full_graph --shard i/3 --skip-done-in data/processed/eval/deepseek_importer --max-llm-calls 450`, then `--merge-from` the shard folders (about 680 cases, about 2.2 USD).
+
+## Status 2026-10-17 (duty and concession wrap-up, 469 tests pass)
+* Plain-rate importer lines matching Customs on every tax: 88% (678 of 770), up from 84%.
+* Further tax for unregistered importers now also at non-18% rates (7/18 of sales tax less the 3% line, flagged OPEN4_OBSERVED). Observed ACD 11% on 11 codes: warning only (OQ-W1). Part III raw-material proviso: offered as a possible rule, never applied (OQ-W5). China FTA family rates: information only (75% reliable, never applied). Phones: still cannot_compute (OQ-W4). Details: docs/gd_findings.md section 4d.
+* Single source of truth for which tax goes into which total: TAX_TOTAL_BUCKET in src/tools/compute.py (guard test).
+* Open for the owner: spot-check sheets (Fifth Schedule, China FTA), OQ-A7-1, OQ-A8-1, sending the FBR email and clearing-agent message, DeepSeek top-up.
 
 ## NEXT STEPS (in order)
 1. Real answer key: owner is asking a friend (textile/electronics importer from China) for 30-50 products with the final accepted 8-digit code (kit in docs/case_collection/). When it arrives: add as a third case file (kind 'importer'), report separately, check for disputes vs clean cases. Real test set is mostly contested goods (66 of 79 are disputes), so scores are pessimistic for everyday goods.
