@@ -103,6 +103,13 @@ def concession_section(duty: dict) -> list[str]:
     if fifth.get("possible_by_description"):
         out.append(f"  Fifth Schedule Part I also has {len(fifth['possible_by_description'])} entries that name goods only in words ('Respective Headings'): "
                    "I cannot match them to a code. If your goods fit one of them, ask your clearing agent (see the tool output).")
+    fam = (con.get("china_fta") or {}).get("possible_by_family")
+    if fam and (con.get("china_fta") or {}).get("origin") is not False:
+        if shown == 0:
+            out.append("CHINA-PAKISTAN FTA: this code is not in the 2019 preferential table (it was probably renumbered under HS 2022), so I cannot offer or apply a preferential rate.")
+        out.append(f"  Neighbouring lines of the same 6-digit family ({fam['six_digit_family'][:4]}.{fam['six_digit_family'][4:]}) are listed at {', '.join(fam['listed_rates_pct'])}%. "
+                   f"Guessing from them is {fam['reliability']}, so I have NOT used it. Please ask your clearing agent for the current preferential rate of this exact code.")
+        shown += 1
     if not shown:
         return []
     for n in (con.get("notes") or []) + (fifth.get("notes") or [])[:1]:

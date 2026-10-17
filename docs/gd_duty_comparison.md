@@ -4,7 +4,7 @@ Source: an importer's Goods Declaration extract, Chapter 85, February 2026 (priv
 
 * Tool could compute: 1483 of 1500 lines. Others: needs_input 10, cannot_compute 7.
 
-* **none**: 770 lines computed, 651 match on every tax (84%).
+* **none**: 770 lines computed, 678 match on every tax (88%).
 * **china_fta**: 524 lines computed, 120 match on every tax (22%).
 * **fifth_schedule**: 45 lines computed, 1 match on every tax (2%).
 * **sro_655_656**: 117 lines computed, 3 match on every tax (2%).
@@ -18,7 +18,7 @@ Source: an importer's Goods Declaration extract, Chapter 85, February 2026 (priv
 | RD | 24 | 1.6% |
 | ACD | 182 | 12.3% |
 | ST | 615 | 41.5% |
-| VAT | 330 | 22.3% |
-| IT | 685 | 46.2% |
+| VAT | 287 | 19.4% |
+| IT | 674 | 45.4% |
 
 Lines with no concession tag (plain rates) are the fair test of the duty rules. China FTA and Fifth Schedule lines show where concessions change the customs duty; the concessions work (docs/concessions_plan.md) should close those gaps.

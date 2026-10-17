@@ -5,8 +5,11 @@ When an input the documents require is missing, the result carries `missing_inpu
 """
 from __future__ import annotations
 
+import csv
 from collections import defaultdict
 from decimal import Decimal, InvalidOperation
+from functools import lru_cache
+from pathlib import Path
 
 from ._util import (
     D, collect, coverage, fmt, get_conn, group_rows, money, norm_code, rule_view, rows, sro_info, to_iso,
@@ -45,7 +48,8 @@ ASSUME_TEXT = {
     "SED_BASE": "Special Excise Duty (Table IA) is taken on V + CD + RD + ACD; the Act does not say whether the Table I FED is also in its base (OQ-A6-2), and no Board notification on collection is in data/raw (OQ-A6-5). The line note shows the alternative amount.",
     "OPEN2": "RD and ACD are counted as 'customs-duties' inside the sales tax and income tax bases (inference from Customs Act s.18A, OPEN-2).",
     "OPEN10": "Value addition tax (Sales Tax Act s.7A(2), Twelfth Schedule: 3% ad valorem at import) is taken on the same base as sales tax and counted as sales tax inside the income tax base. The Schedule says only 'ad valorem' (OPEN-10).",
-    "OPEN4": "Further tax (s.3(1A), 4%) is written in the Act for supplies to unregistered persons. Whether Customs collects it at import is not in the documents (OPEN-4), so it is shown but not added to the total.",
+    "OPEN4": "Further tax (s.3(1A), 4%) is written in the Act for supplies to unregistered persons. The Act text does not say it is collected at import; real assessed Goods Declarations show Customs collecting it (3% + 4% = 7% of V_ST at the 18% rate), so it is added (OPEN-4, docs/gd_findings.md).",
+    "OPEN4_OBSERVED": "For unregistered importers at a sales-tax rate other than 18% the extra amount is the rate seen on real assessed Goods Declarations (7/18 of the sales tax in total with the value addition tax), not a rate printed in the Act (docs/gd_findings.md section 4d).",
     "REGIME": "Ordinary commercial import assumed: none of the ACD para 3 'not levied' regimes (Fifth Schedule, Baggage Rules, SROs 577/565/693/492/678 or 655/656) was claimed.",
     "VATFACTS": "No value-addition-tax exclusion that depends on the importer was claimed (manufacturer raw material for in-house use, registered service provider in-house use).",
     "TWELFTH_P3": "Income-tax class Part III (residual) was chosen because no Part I or Part II entry matched the code. Twelfth Schedule entries that name goods only in words cannot be matched by code (OPEN-9).",
@@ -101,6 +105,21 @@ class _Bill:
 def _cite(table, row, kind):
     v = rule_view(table, row, kind)
     return {k: v[k] for k in ("rule_id", "instrument", "clause", "source_file", "page", "valid_from", "valid_to", "status", "rule_group") if k in v}
+
+
+_OBSERVED_ACD_FILE = Path(__file__).resolve().parents[2] / "data" / "ground_truth" / "observed_acd_exceptions.csv"
+
+
+@lru_cache(maxsize=1)
+def observed_acd_exceptions() -> dict:
+    """code -> {'pct', 'lines', 'evidence'} for codes where real assessed duties show an additional customs duty that no notification we hold explains
+    (src/eval/observed_acd.py). Used only to WARN; the bill itself follows the notifications as printed."""
+    out = {}
+    if _OBSERVED_ACD_FILE.exists():
+        with open(_OBSERVED_ACD_FILE, encoding="utf-8", newline="") as f:
+            for r in csv.DictReader(f):
+                out[r["code"]] = {"pct": D(r["observed_acd_pct"]), "lines": int(r["lines"] or 0), "evidence": r["evidence"]}
+    return out
 
 
 def _atl_rule_cite(d: str) -> dict:
@@ -538,16 +557,22 @@ def _compute_core(code, assessable_value_pkr, as_of_date, importer=None, quantit
     fur_amt = None
     if reg == "unregistered" and ft and st_decision and st_decision[0] == "percent" and V_ST is not None:
         r = ft[0]
-        amt = R(V_ST * _pct(r) / HUNDRED)
-        # Evidence (importer GD extract, Chapter 85, Feb 2026, docs/gd_findings.md): on lines taxed at the standard 18%, Customs collected an extra
-        # sales-tax amount of 7% of V_ST (the 3% value addition tax plus this 4% further tax) and put it into the income-tax base. So at the standard rate it is
-        # added to the total. At other sales-tax rates (for example 25%) the extra amount was larger (about 9.8%) and is not understood: shown, not added.
         std_rate = st_decision[1] == Decimal(18)
-        _line(bill, "FURTHER_TAX", "Further tax, unregistered person (s.3(1A))" + ("" if std_rate else " - NOT in total"), {"kind": "percent", "pct": fmt(_pct(r))},
-              "V + CD + RD + ACD + FED + SED", V_ST, amt, _cite("sales_tax_rules", r, "ST"), r, assumptions=("OPEN4",), included=std_rate,
-              note=("Collected at import from unregistered importers (seen on real assessed Goods Declarations at the 18% rate); part of the income-tax base."
-                    if std_rate else "At this sales-tax rate real assessments showed a larger extra amount that is not understood (OPEN-4); shown, not added."))
-        if std_rate:
+        # Evidence (importer GD extract, Chapter 85, Feb 2026, docs/gd_findings.md section 4d): Customs collected from unregistered importers an extra sales-tax amount
+        # that equals 0.39 x the sales tax: 7% of V_ST at the standard 18% rate (the 3% value addition tax plus the 4% further tax of s.3(1A)) and about 9.75% at a 25% rate
+        # (265 lines). It is part of the income-tax base. At 18% the amount is built from the two documented rates; at other rates it is the observed 7/18 of the sales tax,
+        # minus the value addition tax already shown on its own line, and is flagged as observed (not found in the Act text).
+        if std_rate or st_amt is None:
+            amt, pct_shown = R(V_ST * _pct(r) / HUNDRED), _pct(r)
+        else:
+            amt = max(R(st_amt * Decimal(7) / Decimal(18)) - (vat_amt or Decimal(0)), Decimal(0))
+            pct_shown = (amt * HUNDRED / V_ST) if V_ST else Decimal(0)
+        included = std_rate or st_amt is not None
+        _line(bill, "FURTHER_TAX", "Further tax, unregistered person (s.3(1A))", {"kind": "percent", "pct": fmt(pct_shown)},
+              "V + CD + RD + ACD + FED + SED", V_ST, amt, _cite("sales_tax_rules", r, "ST"), r, assumptions=("OPEN4",) if std_rate else ("OPEN4", "OPEN4_OBSERVED"), included=included,
+              note=("Collected at import from unregistered importers (seen on real assessed Goods Declarations); part of the income-tax base."
+                    if std_rate else "At this sales-tax rate the amount is the OBSERVED 7/18 of the sales tax less the value addition tax (real assessed Goods Declarations, 265 lines at 25%); not found in the Act text."))
+        if included:
             fur_amt = amt
     bill.notes.append("Extra tax (s.3(5)) is a power clause with no rate in the Act; nothing is added.")
 
@@ -586,6 +611,16 @@ def _compute_core(code, assessable_value_pkr, as_of_date, importer=None, quantit
                     chosen = pr[0] if pr else None
                     if not chosen:
                         bill.no("income tax", f"no First Schedule Part II rate row '{want}' for Part {cls} on {d}")
+                    if chosen is not None and cls == 3 and facts.ib("manufacturer_in_house_use"):
+                        # Second proviso to s.148(1): Part III goods used both as raw material and as finished goods are treated as Part II when a manufacturer imports them as raw
+                        # material for its own use, if the Board has notified it. The list is not in our documents, so the rule is offered, never applied. Real assessed Goods
+                        # Declarations (Feb 2026) charged the Part II rate on 23 such lines (cable wire, capacitors).
+                        p2 = [r for r in group_rows(conn, "income_tax_rules", "IT-S148-RATE-P2", d) if r["importer_category"] == ("commercial importer" if comm else "persons (any importer)")]
+                        if p2:
+                            bill.possible.append({"instrument": "Income Tax Ordinance 2001", "clause": "s.148(1), second proviso (Part III goods imported by a manufacturer as raw material for its own use)",
+                                                  "condition": (f"If the Board has notified these goods for the importer as raw material for its own use, income tax is charged at the Part II rate {fmt(_pct(p2[0]))}% "
+                                                                f"instead of {fmt(_pct(chosen))}%. The tool cannot see the Board's list: confirm with your clearing agent."),
+                                                  "alternative_rate_pct": fmt(_pct(p2[0])), "source_file": p2[0]["source_file"], "page": p2[0]["page"], "rule_id": f"income_tax_rules:{p2[0]['id']}"})
             if chosen is not None:
                 third_goods = bool(third)
                 if third_goods:
@@ -617,6 +652,17 @@ def _compute_core(code, assessable_value_pkr, as_of_date, importer=None, quantit
         bill.flag("sugar_notifications_not_applied: SRO 1215/1217/1832/527/663 (sugar) name no PCT code; the reduced sugar rates are stored needs_review and are NOT applied. Ask Maaz (OQ-A3-3).")
     if c.startswith(PHONE_PREFIXES):
         bill.flag("mobile_phone: sales tax and income tax special tables are not matched by code; see cannot_compute")
+
+    obs = observed_acd_exceptions().get(c)
+    if obs is not None and acd_amt is not None:
+        alt = R(V * obs["pct"] / HUNDRED)
+        ev = f"{obs['lines']} real assessed Goods Declaration lines" if obs["lines"] else "the WeBOC duty calculator"
+        bill.possible.append({"instrument": "Observed on real assessments (not a notification we hold)", "clause": f"additional customs duty {fmt(obs['pct'])}% on {c}",
+                              "condition": (f"{ev} show additional customs duty of {fmt(obs['pct'])}% on this code, which neither SRO 1151(I)/2025 nor SRO 1063(I)/2026 explains. "
+                                            f"This bill uses the notifications as printed (additional customs duty PKR {fmt(acd_amt, 2)}); at {fmt(obs['pct'])}% it would be PKR {fmt(alt, 2)}, "
+                                            "so the total may be understated. Confirm with your clearing agent."),
+                              "alternative_rate_pct": fmt(obs["pct"]), "evidence": obs["evidence"]})
+        bill.flag(f"observed_acd_{fmt(obs['pct'])}pct_not_explained_by_notifications")
 
     # ---------------- result
     status = "computed"

@@ -236,6 +236,15 @@ def fta_block(conn, c: str, d: str, trow: dict, goods: dict | None) -> dict:
         out["options"].append(o)
     if not out["options"]:
         out["notes"].append("No SRO 1640(I)/2019 row for this code on this date (the code may not be in the 2019 table, or it was renumbered: OQ-A8-1).")
+        # Neighbouring lines of the same 6-digit family, shown as INFORMATION only. Tested against real assessed duties (importer GD extract, Feb 2026, 1,162 China FTA
+        # lines whose code is missing from the table): a single-rate family gave the charged duty on 136 of 182 lines (75%), a multi-rate family on about half,
+        # so the rate is never offered or applied; the importer is told to ask the clearing agent.
+        fam = rows(conn, "SELECT DISTINCT rate_pct FROM fta_rules WHERE substr(code_norm,1,6)=? AND match_level='code8' AND valid_from <= ? AND valid_to >= ?", [c[:6], d, d])
+        if fam:
+            rates = sorted({D(x["rate_pct"]) for x in fam})
+            out["possible_by_family"] = {"six_digit_family": c[:6], "listed_rates_pct": [fmt(x) for x in rates], "single_rate": len(rates) == 1,
+                                         "reliability": "about 75% right when the family has one rate, about 50% when it has several (tested on real assessed duties)",
+                                         "note": "NOT offered and NOT applied. Ask your clearing agent for the current preferential rate of this code."}
     return out
 
 

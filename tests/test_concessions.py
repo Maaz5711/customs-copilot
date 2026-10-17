@@ -197,3 +197,21 @@ def test_fta_questions_for_the_agent():
 def test_code_without_a_row_in_the_2019_sro_offers_nothing():
     r = fta("8201.3000", "2026-08-01", CN)
     assert r["concessions"]["china_fta"]["options"] == [] and r["concessions"]["questions"] == [] or r["concessions"]["questions"][0]["id"] != "origin_country"
+
+
+def test_a_code_missing_from_the_2019_china_table_gets_information_only_never_a_rate():
+    from src.tools._util import get_conn, rows
+
+    conn = get_conn()
+    code = None
+    for r in rows(conn, "SELECT code_norm FROM tariff_lines WHERE fy='FY2025-26' AND level=8 AND cd_kind='plain' ORDER BY code_norm"):
+        c = r["code_norm"]
+        if rows(conn, "SELECT 1 FROM fta_rules WHERE code_norm=? LIMIT 1", [c]) or not rows(conn, "SELECT 1 FROM fta_rules WHERE substr(code_norm,1,6)=? AND match_level='code8' LIMIT 1", [c[:6]]):
+            continue
+        code = c
+        break
+    assert code, "no code with a family but no row of its own"
+    res = compute_duty(code, V, "2026-02-10", importer={**IMP, "commercial_importer": True}, goods={"origin_country": "CN", "plant_machinery_for_manufacturing": False})
+    fta = res["concessions"]["china_fta"]
+    assert fta["options"] == [] and fta["possible_by_family"]["six_digit_family"] == code[:6]
+    assert "NOT offered and NOT applied" in fta["possible_by_family"]["note"] and fta["possible_by_family"]["listed_rates_pct"]
