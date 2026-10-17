@@ -523,7 +523,7 @@ class DeepSeekLLM:
         self.cache = ResponseCache(cache_dir or DEEPSEEK_CACHE_DIR, enabled=cache)
         self._post, self._sleep = post, sleep
         self.max_calls, self.max_failures, self.timeout, self.retries = max_calls, max_failures, timeout, retries
-        self.stats = {"live_calls": 0, "failed_requests": 0, "cache_hits": 0, "tokens_in": 0, "tokens_out": 0, "log": []}
+        self.stats = {"live_calls": 0, "failed_requests": 0, "cache_hits": 0, "tokens_in": 0, "tokens_out": 0, "tokens_in_cached": 0, "log": []}
 
     def _key(self) -> str:
         if self._api_key:
@@ -585,8 +585,9 @@ class DeepSeekLLM:
                     continue
                 self.stats["tokens_in"] += int(usage.get("prompt_tokens") or 0)
                 self.stats["tokens_out"] += int(usage.get("completion_tokens") or 0)
+                self.stats["tokens_in_cached"] += int(usage.get("prompt_cache_hit_tokens") or 0)     # DeepSeek's own server-side prefix cache (billed at a fraction of the normal input price)
                 self.cache.put(ckey, {"task": task, "model": model, "response": parsed, "text": text,
-                                      "usage": {k: usage.get(k) for k in ("prompt_tokens", "completion_tokens", "total_tokens")},
+                                      "usage": {k: usage.get(k) for k in ("prompt_tokens", "completion_tokens", "total_tokens", "prompt_cache_hit_tokens")},
                                       "created_at": dt.datetime.now(dt.timezone.utc).isoformat(), "system": system, "prompt": prompt,
                                       "temperature": temperature, "thinking": thinking})
                 return LLMResult(data=parsed, model=model, cached=False, text=text, usage=usage)
