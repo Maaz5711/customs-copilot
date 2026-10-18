@@ -3,18 +3,19 @@ import { ArrowDown, Check, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { glideTo } from "../SmoothScroll";
-import type { GateScene as GateSceneType } from "./GateScene";
+import type { PortScene as PortSceneType } from "./PortScene";
 import { CHAPTERS, EXAMPLE, PINS, TRY_TEXT, chapterAt, clamp01, fmtPKR } from "./chapters";
 import { CountUp } from "./CountUp";
 import { KineticText } from "./KineticText";
-import { Photo } from "./Photo";
+import { PortSketch } from "./PortSketch";
 
-// The home page story. The server sends the plain version (all chapters stacked as cards, each with its photo), which also works without JavaScript.
-// On a capable device the page upgrades to the pinned version: one sticky stage with full-bleed port photos that wipe from one to the next and slowly
-// push in as you scroll, the 3D gate drawn over them as a see-through wireframe, source pins you can open, and the chapters crossfading on top.
-// The 3D layer is skipped for: reduced-motion setting, data-saver, very low-core devices, no WebGL, or a lost WebGL context.
+// The home page story. The server sends the plain version (a flat sketch of the port and all chapters stacked as cards), which also works without
+// JavaScript. On a capable device the page upgrades to the pinned version: one sticky stage with a hand-drafted 3D port that plays as you scroll
+// (ship docks, crane lifts the container, a clearing agent checks it, the bill stacks up, the truck leaves through the green gate), source pins you can
+// open, a clearance log that jumps to each step, and the chapters crossfading on top. White paper in light theme, blueprint in dark theme.
+// The 3D version is skipped for: reduced-motion setting, data-saver, very low-core devices, no WebGL, or a lost WebGL context.
 
-type SceneCtor = { new (c: HTMLCanvasElement): GateSceneType; supported(): boolean };
+type SceneCtor = { new (c: HTMLCanvasElement): PortSceneType; supported(): boolean };
 
 const pad = (n: number) => String(n).padStart(3, "0");
 
@@ -25,7 +26,6 @@ export function Story() {
   const trackRef = useRef<HTMLElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const photosRef = useRef<HTMLDivElement>(null);
   const readoutRef = useRef<HTMLSpanElement>(null);
   const ctorRef = useRef<SceneCtor | null>(null);
 
@@ -36,30 +36,21 @@ export function Story() {
     const cores = navigator.hardwareConcurrency ?? 4;
     if (reduced || saver || cores <= 2) return;
     let dead = false;
-    import("./GateScene").then(({ GateScene }) => {
-      if (dead || !GateScene.supported()) return;
-      ctorRef.current = GateScene as unknown as SceneCtor;
+    import("./PortScene").then(({ PortScene }) => {
+      if (dead || !PortScene.supported()) return;
+      ctorRef.current = PortScene as unknown as SceneCtor;
       setMode("pinned");
     });
     return () => { dead = true; };
   }, []);
 
-  // 2. Run the scene, the photo push-in and the readout while the story is on screen.
+  // 2. Run the scene and the readout while the story is on screen.
   useEffect(() => {
     if (mode !== "pinned") return;
     const track = trackRef.current, stage = stageRef.current, canvas = canvasRef.current, Ctor = ctorRef.current;
     if (!track || !stage || !canvas || !Ctor) return;
     const scene = new Ctor(canvas);
     scene.onLost = () => setMode("static");
-
-    // Each photo slowly pushes in and drifts up across its own chapter (Web Animations API, paused and scrubbed by scroll: no inline styles).
-    const imgs = [...(photosRef.current?.querySelectorAll<HTMLImageElement>("img") ?? [])];
-    const push = imgs.map((img) =>
-      typeof img.animate === "function"
-        ? img.animate([{ transform: "scale(1.14) translateY(1.5%)" }, { transform: "scale(1.02) translateY(-1.5%)" }], { duration: 1000, fill: "both", easing: "linear" })
-        : null,
-    );
-    push.forEach((a) => a?.pause());
 
     const size = () => scene.setSize(stage.clientWidth, stage.clientHeight);
     const ro = new ResizeObserver(size);
@@ -71,10 +62,6 @@ export function Story() {
       const total = r.height - window.innerHeight;
       const p = total > 0 ? clamp01(-r.top / total) : 0;
       scene.setProgress(p);
-      CHAPTERS.forEach((c, i) => {
-        const a = push[i];
-        if (a) a.currentTime = 1000 * clamp01((p - c.from + 0.06) / (c.to - c.from + 0.12));
-      });
       if (readoutRef.current) readoutRef.current.textContent = p.toFixed(3);
       const c = CHAPTERS.indexOf(chapterAt(p));
       setIdx((prev) => (prev === c ? prev : c));
@@ -92,11 +79,18 @@ export function Story() {
     const io = new IntersectionObserver(([e]) => scene.setVisible(!!e?.isIntersecting), { rootMargin: "120px" });
     io.observe(track);
 
+    // The drawing follows the site theme: white paper in light, blueprint in dark.
+    const retheme = () => scene.refreshTheme();
+    const mo = new MutationObserver(retheme);
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    mq.addEventListener("change", retheme);
+
     return () => {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
-      ro.disconnect(); io.disconnect();
-      push.forEach((a) => a?.cancel());
+      ro.disconnect(); io.disconnect(); mo.disconnect();
+      mq.removeEventListener("change", retheme);
       scene.dispose();
     };
   }, [mode]);
@@ -138,12 +132,8 @@ export function Story() {
   return (
     <section ref={trackRef} id="story" data-mode={mode} aria-label="How an answer is made" className="story">
       <div ref={stageRef} className="story-stage">
-        {/* full-bleed photos (pinned version only; the plain version shows each photo in its card) */}
-        <div ref={photosRef} className="story-photos" aria-hidden="true">
-          {CHAPTERS.map((c, i) => <Photo key={c.id} name={c.photo} eager={i === 0} className="story-photo" active={pinned && idx === i} />)}
-        </div>
-        <div className="story-scrim" aria-hidden="true" />
         <canvas ref={canvasRef} className="story-canvas" aria-hidden="true" />
+        <div className="story-flat mx-auto max-w-5xl px-4 pt-14 sm:px-6"><PortSketch className="mx-auto w-full max-w-3xl" /></div>
 
         {/* drawing-sheet frame: corner marks and readouts, like a technical drawing */}
         {pinned && (
@@ -207,7 +197,6 @@ export function Story() {
             const active = on(i);
             return (
               <article key={c.id} data-active={active} data-card={["code", "bill", "sources", "unsure"].includes(c.id)} aria-hidden={pinned && !active ? true : undefined} inert={pinned && !active} className="story-panel glass">
-                <Photo name={c.photo} className="story-thumb" />
                 <p className="hud-label text-gold">{pad(i + 1)} · {c.kicker}</p>
                 <KineticText text={c.title} level={i === 0 ? 1 : 2} active={active && pinned} className="story-title mt-2 font-display font-semibold" />
                 <p className="story-body mt-3 text-[17px] text-ink-2">{c.body}</p>
