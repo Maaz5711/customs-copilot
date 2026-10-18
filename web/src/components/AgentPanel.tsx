@@ -3,6 +3,7 @@ import { SendHorizontal } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import type { AgentReply } from "@/lib/types";
+import type { Seed } from "./home/ToolsContext";
 import { Questions } from "./Questions";
 import { ResultView } from "./ResultView";
 import { Field, Notice, Spinner } from "./ui";
@@ -14,7 +15,8 @@ const EXAMPLES = [
 ];
 const MAX = 1500;
 
-export function AgentPanel({ date, seed }: { date: string; seed: { text: string; n: number } }) {
+export function AgentPanel({ date, seed, variant }: { date: string; seed: Seed; variant?: "hero" }) {
+  const hero = variant === "hero";
   const uid = useId();
   const [text, setText] = useState("");
   const [reply, setReply] = useState<AgentReply | null>(null);
@@ -24,7 +26,13 @@ export function AgentPanel({ date, seed }: { date: string; seed: { text: string;
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => { if (seed.n) { setText(seed.text); setReply(null); setError(null); } }, [seed]);
+  // A seed fills the box; a seed with run (a chip, a common-import card, "Try this product") also asks straight away.
+  useEffect(() => {
+    if (!seed.n) return;
+    setText(seed.text); setReply(null); setError(null);
+    if (seed.run && seed.text.trim().length >= 2) { setAsked(seed.text.trim()); run(() => api.ask(seed.text.trim(), date)); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed]);
   useEffect(() => () => { if (timer.current) clearInterval(timer.current); }, []);
 
   const run = async (fn: () => Promise<AgentReply>) => {
@@ -52,10 +60,10 @@ export function AgentPanel({ date, seed }: { date: string; seed: { text: string;
     <div className="grid gap-5">
       {!reply && (
         <form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); start(); }}>
-          <Field label="Describe what you want to import" htmlFor={`${uid}-q`} hint="Say what it is, what it is made of, what it is for, new or used, and the value if you know it. The more you say, the fewer questions I ask.">
+          <Field label={hero ? "Your goods" : "Describe what you want to import"} htmlFor={`${uid}-q`} hint="Say what it is, what it is made of, what it is for, new or used, and the value if you know it. The more you say, the fewer questions I ask.">
             <textarea
               id={`${uid}-q`}
-              className="min-h-32 w-full resize-y rounded-lg border border-line bg-surface px-3 py-2.5 text-[16px] text-ink placeholder:text-ink-2/70 focus:border-blue"
+              className={`w-full resize-y rounded-lg border border-line bg-surface px-3 py-2.5 text-ink placeholder:text-ink-2/70 focus:border-blue ${hero ? "min-h-24 text-[18px]" : "min-h-32 text-[16px]"}`}
               maxLength={MAX}
               value={text}
               placeholder={EXAMPLES[0]}
@@ -64,14 +72,16 @@ export function AgentPanel({ date, seed }: { date: string; seed: { text: string;
             />
           </Field>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2" aria-label="Examples">
-              <span className="text-sm text-ink-2">Try:</span>
-              {EXAMPLES.map((ex) => (
-                <button key={ex} type="button" onClick={() => setText(ex)} className="min-h-11 rounded-full border border-line px-3.5 text-sm text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink">
-                  {ex.length > 34 ? `${ex.slice(0, 34)}…` : ex}
-                </button>
-              ))}
-            </div>
+            {hero ? <p className="text-sm text-ink-2">Rules as of <span className="num font-semibold text-ink">{date}</span> · <a href="#tool" className="underline-offset-2 hover:underline">change date</a></p> : (
+              <div className="flex flex-wrap items-center gap-2" aria-label="Examples">
+                <span className="text-sm text-ink-2">Try:</span>
+                {EXAMPLES.map((ex) => (
+                  <button key={ex} type="button" onClick={() => setText(ex)} className="min-h-11 rounded-full border border-line px-3.5 text-sm text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink">
+                    {ex.length > 34 ? `${ex.slice(0, 34)}…` : ex}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="flex items-center gap-3">
               <span className="num text-sm text-ink-2" aria-hidden="true">{text.length}/{MAX}</span>
               <button type="submit" disabled={busy || text.trim().length < 2} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-brand px-5 py-2 text-[15px] font-semibold text-on-brand transition-opacity hover:opacity-90">

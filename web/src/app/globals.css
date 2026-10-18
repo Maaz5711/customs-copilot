@@ -82,6 +82,10 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 
 /* ---------------------------------------------------------------------------------------------------------------------------------- scroll story */
 /* The story is a drawing on paper: warm white in light theme, soft graphite in dark theme (--paper is read by the 3D scene too). */
+.ask-hero { background: radial-gradient(60rem 26rem at 50% -6rem, color-mix(in srgb, var(--gold) 14%, transparent), transparent 70%), var(--bg); }
+:root { --paper-soft: #f8f7f3; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --paper-soft: #18191c; } }
+:root[data-theme="dark"] { --paper-soft: #18191c; }
 .story { --paper: #f8f7f3; position: relative; background: var(--paper); color: var(--ink); padding-bottom: 2rem; border-bottom: 1px solid var(--line); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .story { --paper: #18191c; } }
 :root[data-theme="dark"] .story { --paper: #18191c; }

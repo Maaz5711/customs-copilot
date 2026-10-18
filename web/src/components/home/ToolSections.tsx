@@ -1,35 +1,22 @@
 "use client";
 import { Calculator, MessageSquareText, Search } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useId, useState } from "react";
-import { api } from "@/lib/api";
-import type { Meta } from "@/lib/types";
-import { AgentPanel } from "../AgentPanel";
+import { useId } from "react";
 import { BillPanel } from "../BillPanel";
 import { LookupPanel } from "../LookupPanel";
-import { glideTo } from "../SmoothScroll";
 import { Field, TextInput } from "../ui";
+import { useTools } from "./ToolsContext";
 
-// The three tools, each in its own section of the home page (describe a product is the main one). One "rules as of" date applies to all three.
-// Cross-links move the visitor between them: a looked-up code opens in the calculator, a keyword can be handed to the agent.
+// The tools part of the home page: a three-way picker (describe a product lives in the search box at the top), the one shared
+// "rules as of" date, then the code lookup and the duty calculator in their own sections. Cross-links move between them.
 
-const localToday = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
-
-const go = (id: string) => {
-  const el = document.getElementById(id);
-  if (el) glideTo(el.getBoundingClientRect().top + window.scrollY - 84); // below the sticky header
-};
-
-function ToolBlock({ id, step, icon, title, lead, main, children }: { id: string; step: string; icon: ReactNode; title: string; lead: string; main?: boolean; children: ReactNode }) {
+function ToolBlock({ id, step, icon, title, lead, children }: { id: string; step: string; icon: ReactNode; title: string; lead: string; children: ReactNode }) {
   return (
-    <section id={id} aria-labelledby={`${id}-h`} className={`scroll-mt-24 rounded-2xl border bg-surface shadow-[0_1px_0_rgba(15,23,42,0.04),0_12px_32px_-18px_rgba(15,23,42,0.25)] ${main ? "border-gold/60" : "border-line"}`}>
+    <section id={id} aria-labelledby={`${id}-h`} className="scroll-mt-24 rounded-2xl border border-line bg-surface shadow-[0_1px_0_rgba(15,23,42,0.04),0_12px_32px_-18px_rgba(15,23,42,0.25)]">
       <div className="flex flex-wrap items-start gap-3 border-b border-line px-4 py-4 sm:px-6">
-        <span className={`inline-flex size-10 shrink-0 items-center justify-center rounded-xl ${main ? "bg-gold-soft text-gold" : "bg-surface-2 text-ink"}`} aria-hidden="true">{icon}</span>
+        <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-ink" aria-hidden="true">{icon}</span>
         <div className="min-w-0 flex-1">
-          <p className="hud-label">{step}{main && <span className="ml-2 rounded-full bg-gold-soft px-2 py-0.5 text-gold">Main tool</span>}</p>
+          <p className="hud-label">{step}</p>
           <h2 id={`${id}-h`} className="mt-0.5 font-display text-2xl font-semibold sm:text-[1.7rem]">{title}</h2>
           <p className="mt-1 max-w-3xl text-ink-2">{lead}</p>
         </div>
@@ -40,32 +27,14 @@ function ToolBlock({ id, step, icon, title, lead, main, children }: { id: string
 }
 
 const PICKS = [
-  ["describe", MessageSquareText, "Describe a product", "You know what the goods are, not the code. Get the code and the full bill."],
+  ["ask", MessageSquareText, "Describe a product", "You know what the goods are, not the code. Get the code and the full bill."],
   ["lookup", Search, "Look up a code", "You know the code or a tariff keyword. See the line, its duty and its page."],
   ["calculate", Calculator, "Calculate duty", "You have the code and the value. Get every duty and tax with sources."],
 ] as const;
 
 export function ToolSections() {
   const uid = useId();
-  const [date, setDate] = useState(localToday());
-  const [meta, setMeta] = useState<Meta | null>(null);
-  const [seed, setSeed] = useState({ text: "", n: 0 });
-  const [codeSeed, setCodeSeed] = useState({ value: "", n: 0 });
-
-  useEffect(() => {
-    api.meta().then((m) => { setMeta(m); setDate(m.today); }).catch(() => {});
-  }, []);
-
-  // "Try this product" buttons in the story fill the describe box with their example.
-  useEffect(() => {
-    const onTry = (e: Event) => {
-      const text = (e as CustomEvent<string>).detail;
-      if (typeof text === "string" && text) setSeed((s) => ({ text, n: s.n + 1 }));
-    };
-    window.addEventListener("cc:try", onTry);
-    return () => window.removeEventListener("cc:try", onTry);
-  }, []);
-
+  const { date, setDate, meta, ask, codeSeed, calc, go } = useTools();
   const outside = meta && (date < meta.covers_from || date > meta.covers_to);
 
   return (
@@ -89,8 +58,8 @@ export function ToolSections() {
 
       <div className="flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-line bg-surface-2/60 px-4 py-4 sm:px-6">
         <div className="max-w-2xl">
-          <h3 className="font-display text-lg font-semibold">One date for all three tools</h3>
-          <p className="text-[15px] text-ink-2">Pick the date your goods are assessed. Every tool uses the rules in force on that date (FY2025-26 and FY2026-27).</p>
+          <h3 className="font-display text-lg font-semibold">One date for every tool</h3>
+          <p className="text-[15px] text-ink-2">Pick the date your goods are assessed. The search box, the lookup and the calculator all use the rules in force on that date (FY2025-26 and FY2026-27).</p>
         </div>
         <Field label="Rules as of" htmlFor={`${uid}-date`}>
           <TextInput id={`${uid}-date`} type="date" className="!min-h-10 !py-1 w-44" value={date} min={meta?.covers_from} max={meta?.covers_to} onChange={(e) => e.target.value && setDate(e.target.value)} />
@@ -98,14 +67,9 @@ export function ToolSections() {
         {outside && <p className="w-full rounded-lg bg-warn-soft px-4 py-3 text-[15px] text-warn" role="alert">This date is outside what the tool covers ({meta!.covers_from} to {meta!.covers_to}).</p>}
       </div>
 
-      <ToolBlock id="describe" step="Tool 1" main icon={<MessageSquareText size={20} />} title="Describe a product"
-        lead="Say what you are importing in plain words. It asks the questions the tariff needs, finds the 8-digit PCT code (or shows its top 3 when unsure) and builds the full bill with a source for every figure.">
-        <AgentPanel date={date} seed={seed} />
-      </ToolBlock>
-
       <ToolBlock id="lookup" step="Tool 2" icon={<Search size={20} />} title="Look up a code"
         lead="Know the code, or a keyword from the tariff? Search all 8-digit lines with their customs duty and tariff page, then send a line to the calculator.">
-        <LookupPanel date={date} onPickCode={(c) => { setCodeSeed((s) => ({ value: c, n: s.n + 1 })); go("calculate"); }} onAskAgent={(t) => { setSeed((s) => ({ text: t, n: s.n + 1 })); go("describe"); }} />
+        <LookupPanel date={date} onPickCode={calc} onAskAgent={ask} />
       </ToolBlock>
 
       <ToolBlock id="calculate" step="Tool 3" icon={<Calculator size={20} />} title="Calculate duty"

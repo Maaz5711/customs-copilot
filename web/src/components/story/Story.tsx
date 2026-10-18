@@ -113,7 +113,7 @@ export function Story() {
   /** Put the example into the tool and go there. */
   const tryIt = () => {
     window.dispatchEvent(new CustomEvent("cc:try", { detail: TRY_TEXT }));
-    const tool = document.getElementById("describe");
+    const tool = document.getElementById("ask");
     if (tool) glideTo(tool.getBoundingClientRect().top + window.scrollY - 8);
   };
 
@@ -200,12 +200,12 @@ export function Story() {
             return (
               <article key={c.id} data-active={active} data-card={["code", "bill", "sources", "unsure"].includes(c.id)} aria-hidden={pinned && !active ? true : undefined} inert={pinned && !active} className="story-panel glass">
                 <p className="hud-label text-gold">{pad(i + 1)} · {c.kicker}</p>
-                <KineticText text={c.title} level={i === 0 ? 1 : 2} active={active && pinned} className="story-title mt-2 font-display font-semibold" />
+                <KineticText text={c.title} level={2} active={active && pinned} className="story-title mt-2 font-display font-semibold" />
                 <p className="story-body mt-3 text-[17px] text-ink-2">{c.body}</p>
 
                 {c.id === "arrive" && (
                   <div className="mt-5 flex flex-wrap items-center gap-3">
-                    <a href="#describe" className="inline-flex min-h-11 items-center rounded-lg bg-brand px-5 py-2 text-[15px] font-semibold text-on-brand transition-opacity hover:opacity-90">Try the tool</a>
+                    <a href="#ask" className="inline-flex min-h-11 items-center rounded-lg bg-brand px-5 py-2 text-[15px] font-semibold text-on-brand transition-opacity hover:opacity-90">Try the tool</a>
                     <Link href="/method" className="inline-flex min-h-11 items-center rounded-lg border border-line px-5 py-2 text-[15px] font-semibold transition-colors hover:bg-surface-2">How it works</Link>
                   </div>
                 )}
@@ -267,7 +267,7 @@ export function Story() {
                 {c.id === "clear" && (
                   <div className="mt-5 flex flex-wrap items-center gap-3">
                     <TryButton primary />
-                    <a href="#describe" className="inline-flex min-h-11 items-center rounded-lg border border-line px-5 py-2 text-[15px] font-semibold transition-colors hover:bg-surface-2">Open the tools</a>
+                    <a href="#ask" className="inline-flex min-h-11 items-center rounded-lg border border-line px-5 py-2 text-[15px] font-semibold transition-colors hover:bg-surface-2">Open the tools</a>
                     <Link href="/method#accuracy" className="inline-flex min-h-11 items-center px-2 py-2 text-[15px] font-semibold text-ink-2 underline-offset-4 hover:text-ink hover:underline">How accurate is it?</Link>
                   </div>
                 )}
