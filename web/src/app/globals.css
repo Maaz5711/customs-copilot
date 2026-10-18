@@ -79,3 +79,71 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 
 .spinner { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--blue); animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------------------------------------------------------------------------------------------------------------------------------- scroll story */
+.glass {
+  background: color-mix(in srgb, var(--surface) 74%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.25);
+  backdrop-filter: blur(14px) saturate(1.25);
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 16px;
+}
+.story { position: relative; }
+.story-stage { position: relative; }
+.story-canvas { display: none; }
+.story-flat { display: block; }
+.story-skip { position: absolute; top: .75rem; right: .75rem; z-index: 5; padding: .5rem .9rem; font-size: 14px; font-weight: 600; min-height: 44px; display: inline-flex; align-items: center; }
+.story-skip:hover { background: color-mix(in srgb, var(--surface-2) 85%, transparent); }
+
+/* plain version: every chapter is a card in normal flow */
+.story-panels { display: grid; gap: 1rem; max-width: 64rem; margin: 1.5rem auto 0; padding: 0 1rem; }
+@media (min-width: 640px) { .story-panels { padding: 0 1.5rem; grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.story-panel { padding: 1.25rem 1.4rem; }
+.story-card { margin-top: 1rem; padding: .9rem 1rem; border-radius: 12px; background: color-mix(in srgb, var(--surface-2) 80%, transparent); border: 1px solid var(--line); }
+
+/* pinned version: one sticky stage with the scene behind and one chapter card at a time */
+.story[data-mode="pinned"] { height: 720svh; }
+.story[data-mode="pinned"] .story-stage { position: sticky; top: 0; height: 100svh; overflow: hidden; }
+.story[data-mode="pinned"] .story-canvas { display: block; position: absolute; inset: 0; width: 100%; height: 100%; }
+.story[data-mode="pinned"] .story-flat { display: none; }
+.story[data-mode="pinned"] .story-panels { position: absolute; inset: auto 0 1rem 0; display: block; margin: 0; max-width: none; padding: 0 1rem; }
+.story[data-mode="pinned"] .story-panel {
+  position: absolute; left: 1rem; right: 1rem; bottom: 0; max-height: 52svh; overflow: auto;
+  opacity: 0; transform: translateY(22px); pointer-events: none;
+  transition: opacity .7s cubic-bezier(.22,.61,.36,1), transform .9s cubic-bezier(.22,.61,.36,1);
+}
+.story[data-mode="pinned"] .story-panel[data-active="true"] { opacity: 1; transform: none; pointer-events: auto; }
+@media (min-width: 768px) {
+  .story[data-mode="pinned"] .story-panels { inset: 0; padding: 0; }
+  .story[data-mode="pinned"] .story-panel { left: max(2rem, calc((100vw - 72rem) / 2)); right: auto; bottom: auto; top: 50%; width: min(31rem, 44vw); max-height: 78svh; translate: 0 -50%; }
+}
+.story-bar { position: absolute; top: 0; left: 0; right: 0; z-index: 4; display: flex; gap: 4px; padding: 6px 1rem; }
+.story-bar span { flex: 1; height: 3px; border-radius: 2px; background: var(--line); transition: background .6s; }
+.story-bar span.is-on { background: var(--blue); }
+
+.story-check { position: absolute; z-index: 4; right: max(1rem, calc((100vw - 72rem) / 2)); top: 5.2rem; width: 17rem; padding: 1rem 1.1rem; }
+.story-step { display: flex; align-items: center; gap: .6rem; font-size: 14px; color: var(--ink-2); transition: color .6s; }
+.story-tick { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); flex: none; transition: all .6s cubic-bezier(.22,.61,.36,1); }
+.story-step.is-now { color: var(--ink); font-weight: 600; }
+.story-step.is-now .story-tick { border-color: var(--blue); box-shadow: 0 0 0 4px color-mix(in srgb, var(--blue) 18%, transparent); }
+.story-step.is-done { color: var(--ink); }
+.story-step.is-done .story-tick { background: var(--ok); border-color: var(--ok); color: var(--bg); }
+
+.story-cue { position: absolute; z-index: 4; left: 50%; bottom: 1.2rem; translate: -50% 0; display: inline-flex; align-items: center; gap: .4rem; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); animation: cue 1.8s ease-in-out infinite; }
+@keyframes cue { 0%,100% { transform: translateY(0); opacity: .6; } 50% { transform: translateY(6px); opacity: 1; } }
+@media (max-width: 767px) { .story-cue { display: none; } }
+
+/* smooth scroll (Lenis) */
+html.lenis, html.lenis body { height: auto; }
+.lenis:not(.lenis-autoToggle).lenis-stopped { overflow: clip; }
+.lenis [data-lenis-prevent] { overscroll-behavior: contain; }
+
+/* small or short screens: keep each chapter card inside the screen without inner scrolling */
+@media (max-width: 767px), (max-height: 640px) {
+  .story[data-mode="pinned"] .story-panel { padding: .85rem 1rem; max-height: 62svh; }
+  .story[data-mode="pinned"] .story-panel[data-card="true"] .story-body { display: none; }
+  .story[data-mode="pinned"] .story-title { font-size: 1.6rem; margin-top: .25rem; }
+  .story[data-mode="pinned"] .story-card { margin-top: .55rem; padding: .5rem .8rem; }
+  .story[data-mode="pinned"] .story-row > * { padding-top: .22rem; padding-bottom: .22rem; }
+  .story[data-mode="pinned"] .story-card table { font-size: 14px; }
+}
