@@ -27,3 +27,9 @@ data/processed/a7_fifth_rules*_store.json
 data/processed/eval/gd_*.csv
 data/processed/eval/gd_*.json
 data/processed/eval/deepseek_importer/
+# private importer extract and everything derived from it per shard (never commit)
+*.xlsx
+data/processed/eval/deepseek_importer_s*/
+data/processed/eval/fireworks_*/
+# duplicate source PDFs in the repo root (originals live in data/raw)
+/*.pdf
