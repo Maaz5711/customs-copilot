@@ -17,6 +17,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from .sanitize import scrub
 from .schemas import AnswerIn, AskIn, BillIn, FeedbackIn, LookupIn
 from .security import DEFAULT_LIMITS, BodyLimit, RateLimiter, SecurityHeaders, client_ip
 from .service import AgentService, Busy, FeedbackStore
@@ -95,7 +96,7 @@ def create_app(service: AgentService | None = None, limiter: RateLimiter | None 
     def ask(body: AskIn, request: Request):
         limited(request, "agent", "agent_hour")
         try:
-            return svc.ask(body.question, body.date or _today())
+            return scrub(svc.ask(body.question, body.date or _today()))
         except Exception as e:
             raise fail(e, "ask") from None
 
@@ -105,7 +106,7 @@ def create_app(service: AgentService | None = None, limiter: RateLimiter | None 
         if not body.answers and not body.reply:
             raise HTTPException(422, detail="Please answer at least one question.")
         try:
-            return svc.answer(body.thread_id, body.answers, body.reply)
+            return scrub(svc.answer(body.thread_id, body.answers, body.reply))
         except KeyError:
             raise HTTPException(404, detail="This conversation has expired. Please start again.") from None
         except Exception as e:
@@ -115,7 +116,7 @@ def create_app(service: AgentService | None = None, limiter: RateLimiter | None 
     def lookup(body: LookupIn, request: Request):
         limited(request, "lookup")
         try:
-            return get_lookup()(body.query, body.date or _today(), body.k, body.chapter, body.cd_pct)
+            return scrub(get_lookup()(body.query, body.date or _today(), body.k, body.chapter, body.cd_pct))
         except Exception as e:
             raise fail(e, "lookup") from None
 
@@ -123,8 +124,8 @@ def create_app(service: AgentService | None = None, limiter: RateLimiter | None 
     def bill(body: BillIn, request: Request):
         limited(request, "bill")
         try:
-            return get_bill()(body.code, body.value_pkr, body.date or _today(), importer=body.importer or None, quantity=body.quantity,
-                              quantity_unit=body.unit, goods=body.goods or None, claimed_rules=body.claimed_rules or None)
+            return scrub(get_bill()(body.code, body.value_pkr, body.date or _today(), importer=body.importer or None, quantity=body.quantity,
+                              quantity_unit=body.unit, goods=body.goods or None, claimed_rules=body.claimed_rules or None))
         except Exception as e:
             raise fail(e, "bill") from None
 

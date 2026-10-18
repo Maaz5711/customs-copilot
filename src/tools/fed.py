@@ -266,7 +266,7 @@ def apply_fed(conn, c, d, base, facts, bill, quantity, quantity_unit, R, line) -
             if sed:
                 alt = R((base + out["fed"]) * pct / HUNDRED)
                 note = (f"Base of the Special Excise Duty is open (OQ-A6-2): used V + CD + RD + ACD. If the base also includes the Table I FED, "
-                        f"the amount would be PKR {fmt(alt, 2)}. The Board may prescribe the mode of collection (s.3(3B) proviso; no notification in data/raw, OQ-A6-5).")
+                        f"the amount would be PKR {fmt(alt, 2)}. The Board may prescribe the mode of collection (s.3(3B) proviso; no notification collected, OQ-A6-5).")
             line(bill, tax, label, {"kind": "percent", "pct": fmt(pct)}, "V + CD + RD + ACD (FED Act s.12(3))", base, amt, cite, row, assumptions=ass, flags=flags, note=note)
         elif kind == "percent":                                     # retail price
             rp = _retail(bill, facts, label)
