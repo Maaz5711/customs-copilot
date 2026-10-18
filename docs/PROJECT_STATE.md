@@ -64,6 +64,10 @@ Customs Copilot (Pakistan): an agent that picks the 8-digit PCT code and compute
 * Further tax for unregistered importers (4% at the 18% rate) is now added and included in the income-tax base (real assessed GDs, docs/gd_findings.md); non-filer income tax doubled (Tenth Schedule rule 1).
 * Importer classification (DeepSeek flash): 150 cases for all three systems (11% / 24% / 42% exact line) and the full agent on 276 cases (44%). Stopped: DeepSeek balance is $0 (HTTP 402). Resume only after a top-up, off-peak: three shards `python -m src.eval.run --llm deepseek --tag importer_s{i} --kinds importer --classify-thinking enabled --systems full_graph --shard i/3 --skip-done-in data/processed/eval/deepseek_importer --max-llm-calls 450`, then `--merge-from` the shard folders (about 680 cases, about 2.2 USD).
 
+## Status 2026-10-18 evening (scroll story v1, handoff)
+* Home page now opens with a scroll story (Three.js gate scene, Lenis smooth scroll, checklist, real example bill) before the tool; plain fallback for no-JS, reduced motion, low-power devices. Production console clean under the strict CSP. Added `three` and `lenis` (exact pins, audit clean).
+* Owner feedback: it needs **real, cinematic imagery (a sea port, container ship, cranes, photos with wireframe overlays)** to feel premium and interactive, like the two example reels. **Next session: read `docs/NEXT_SESSION_BRIEF.md`.**
+
 ## Status 2026-10-18 (web app built, 493 tests pass)
 * **Web app** in `web/` (Next.js 16, TypeScript, Tailwind 4; pages: tool, how it works, privacy) and **API** in `src/api` (FastAPI). Three modes: describe a product (agent with questions, bill, sources, feedback), look up a code (`src/tools/code_lookup.py`, no AI), calculate duty (exact engine). Run: `python -m src.api` and `cd web && npm run dev` (details web/README.md). Preview configs are in `.claude/launch.json`.
 * Verified live in the browser with the real agent: power bank -> 8507.6000, total PKR 218,256.00 with a source on every line; strict CSP gives a clean console in production; mobile 375px has no horizontal scroll.
