@@ -9,3 +9,6 @@ numpy
 mcp>=2.3
 langgraph
 langgraph-checkpoint-sqlite
+fastapi==0.115.6
+uvicorn
+httpx
