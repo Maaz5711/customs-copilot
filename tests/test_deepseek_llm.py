@@ -108,3 +108,20 @@ def test_tokens_served_from_the_providers_prefix_cache_are_counted(tmp_path):
     llm, _ = make(tmp_path, Resp(usage={"prompt_tokens": 1000, "completion_tokens": 20, "prompt_cache_hit_tokens": 640}))
     llm.complete_json(task="t", system="sys", prompt="p")
     assert llm.stats["tokens_in"] == 1000 and llm.stats["tokens_in_cached"] == 640
+
+
+def test_fireworks_uses_its_own_url_key_cache_and_request_shape(tmp_path, monkeypatch):
+    from src.agent.llm import FireworksLLM
+
+    p = Poster(Resp())
+    llm = FireworksLLM(api_key="fw-test", model="accounts/fireworks/models/x", cache_dir=tmp_path, post=p, sleep=lambda s: None)
+    llm.complete_json(task="t", system="sys", prompt="p")
+    c = p.calls[0]
+    assert c["url"].startswith("https://api.fireworks.ai/") and c["body"]["model"] == "accounts/fireworks/models/x" and "thinking" not in c["body"]
+    monkeypatch.delenv("FIREWORKS_API_KEY", raising=False)
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **k: None)
+    with pytest.raises(LLMUnavailable, match="FIREWORKS_API_KEY"):
+        FireworksLLM(model="m", cache_dir=tmp_path, post=p).complete_json(task="t", system="s", prompt="q")
+    with pytest.raises(LLMUnavailable, match="No Fireworks model"):
+        FireworksLLM(api_key="k", cache_dir=tmp_path / "b", post=p).complete_json(task="t", system="s", prompt="q")
+    assert make_llm("fireworks", api_key="k", model="m", cache_dir=tmp_path / "c").name == "fireworks"
