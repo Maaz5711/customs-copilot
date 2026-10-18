@@ -4,6 +4,7 @@ import { noteText } from "@/lib/api";
 import { useReveal } from "@/lib/motion";
 import type { Candidate, FinalResult, Note } from "@/lib/types";
 import { BillTable, TotalsSummary } from "./BillTable";
+import { CandidateCompare } from "./CandidateCompare";
 import { Feedback } from "./Feedback";
 import { Card, Notice, Pill } from "./ui";
 
@@ -31,6 +32,33 @@ function Candidates({ list, title }: { list: Candidate[]; title: string }) {
   );
 }
 
+/** Where this answer stands, in the order a clearance moves: goods, code, duty, sources, ready to check with Customs. */
+function Pipeline({ result }: { result: FinalResult }) {
+  const coded = result.status === "answer" || result.status === "cannot_compute";
+  const steps: [string, "done" | "warn" | "todo", string][] = [
+    ["Goods", "done", "described"],
+    ["Code", coded ? "done" : result.status === "not_sure" ? "warn" : "todo", coded && result.code ? fmtCode(result.code) : result.status === "not_sure" ? "top candidates" : "not found"],
+    ["Duty", result.status === "answer" ? "done" : result.status === "cannot_compute" ? "warn" : "todo", result.status === "answer" ? "calculated" : result.status === "cannot_compute" ? "partly calculated" : "waiting for the code"],
+    ["Sources", coded ? "done" : "todo", coded ? "cited per line" : "—"],
+    ["Clearance", "todo", "confirm with Customs"],
+  ];
+  const tone = { done: "border-ok bg-ok text-bg", warn: "border-warn bg-warn-soft text-warn", todo: "border-line bg-surface text-ink-2" };
+  return (
+    <ol aria-label="Where this answer stands" className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+      {steps.map(([label, state, note], i) => (
+        <li key={label} className="rounded-lg border border-line bg-surface p-2.5">
+          <div className="flex items-center gap-2">
+            <span className={`inline-flex size-5 items-center justify-center rounded-full border text-[11px] font-bold ${tone[state]}`} aria-hidden="true">{state === "done" ? "✓" : i + 1}</span>
+            <span className="text-sm font-semibold">{label}</span>
+            <span className="sr-only">: {state === "done" ? "done" : state === "warn" ? "needs attention" : "not done"}</span>
+          </div>
+          <p className="num mt-1 truncate text-xs text-ink-2">{note}</p>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function List({ title, items, tone }: { title: string; items?: Note[]; tone?: "warn" }) {
   if (!items?.length) return null;
   return (
@@ -49,6 +77,7 @@ export function ResultView({ result, threadId, onRestart }: { result: FinalResul
 
   return (
     <div ref={ref} className="grid gap-5" aria-live="polite">
+      {(result.status === "answer" || result.status === "cannot_compute" || result.status === "not_sure") && <Pipeline result={result} />}
       {(result.status === "answer" || result.status === "cannot_compute") && result.code && (
         <>
           <Card data-reveal>
@@ -77,6 +106,7 @@ export function ResultView({ result, threadId, onRestart }: { result: FinalResul
           <List title="Assumptions" items={result.assumptions} />
           {result.verification?.summary && <p className="flex gap-2 text-sm text-ink-2"><Info size={18} className="mt-0.5 shrink-0" aria-hidden="true" />Checks run: {result.verification.summary}</p>}
           <Candidates list={cands.slice(1)} title="Other codes I considered" />
+          {result.bill && <CandidateCompare chosen={result.code} lines={result.bill.lines} candidates={cands} date={result.as_of_date} />}
         </>
       )}
 

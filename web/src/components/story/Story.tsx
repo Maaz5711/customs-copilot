@@ -16,6 +16,7 @@ import { PortSketch } from "./PortSketch";
 // The 3D version is skipped for: reduced-motion setting, data-saver, very low-core devices, no WebGL, or a lost WebGL context.
 
 type SceneCtor = { new (c: HTMLCanvasElement): PortSceneType; supported(): boolean };
+type GateLike = { snap(): void };
 
 const pad = (n: number) => String(n).padStart(3, "0");
 
@@ -51,6 +52,7 @@ export function Story() {
     if (!track || !stage || !canvas || !Ctor) return;
     const scene = new Ctor(canvas);
     scene.onLost = () => setMode("static");
+    if (process.env.NODE_ENV === "development") (window as Window & { __story?: GateLike }).__story = scene;
 
     const size = () => scene.setSize(stage.clientWidth, stage.clientHeight);
     const ro = new ResizeObserver(size);
@@ -111,7 +113,7 @@ export function Story() {
   /** Put the example into the tool and go there. */
   const tryIt = () => {
     window.dispatchEvent(new CustomEvent("cc:try", { detail: TRY_TEXT }));
-    const tool = document.getElementById("tool");
+    const tool = document.getElementById("describe");
     if (tool) glideTo(tool.getBoundingClientRect().top + window.scrollY - 8);
   };
 
@@ -203,7 +205,7 @@ export function Story() {
 
                 {c.id === "arrive" && (
                   <div className="mt-5 flex flex-wrap items-center gap-3">
-                    <a href="#tool" className="inline-flex min-h-11 items-center rounded-lg bg-brand px-5 py-2 text-[15px] font-semibold text-on-brand transition-opacity hover:opacity-90">Try the tool</a>
+                    <a href="#describe" className="inline-flex min-h-11 items-center rounded-lg bg-brand px-5 py-2 text-[15px] font-semibold text-on-brand transition-opacity hover:opacity-90">Try the tool</a>
                     <Link href="/method" className="inline-flex min-h-11 items-center rounded-lg border border-line px-5 py-2 text-[15px] font-semibold transition-colors hover:bg-surface-2">How it works</Link>
                   </div>
                 )}
@@ -265,7 +267,7 @@ export function Story() {
                 {c.id === "clear" && (
                   <div className="mt-5 flex flex-wrap items-center gap-3">
                     <TryButton primary />
-                    <a href="#tool" className="inline-flex min-h-11 items-center rounded-lg border border-line px-5 py-2 text-[15px] font-semibold transition-colors hover:bg-surface-2">Open the tool</a>
+                    <a href="#describe" className="inline-flex min-h-11 items-center rounded-lg border border-line px-5 py-2 text-[15px] font-semibold transition-colors hover:bg-surface-2">Open the tools</a>
                     <Link href="/method#accuracy" className="inline-flex min-h-11 items-center px-2 py-2 text-[15px] font-semibold text-ink-2 underline-offset-4 hover:text-ink hover:underline">How accurate is it?</Link>
                   </div>
                 )}
