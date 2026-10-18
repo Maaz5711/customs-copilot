@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+/* Design system: Swiss-style minimal, trust navy with a restrained gold accent (design-system/customs-copilot/MASTER.md).
+   Every colour is a token. Light is the default; dark follows the system unless the visitor picks one (data-theme on <html>). */
+:root {
+  --bg: #f6f8fb;
+  --surface: #ffffff;
+  --surface-2: #eef2f7;
+  --ink: #0b1324;
+  --ink-2: #44546b;
+  --line: #dbe3ee;
+  --brand: #0f172a;
+  --on-brand: #ffffff;
+  --blue: #1e3a8a;
+  --gold: #8a5a05;
+  --gold-soft: #f7ebd0;
+  --ok: #17663b;
+  --ok-soft: #dcf2e4;
+  --warn: #8a4b00;
+  --warn-soft: #fbe9cf;
+  --bad: #b42318;
+  --bad-soft: #fde4e1;
+  --ring: #1e3a8a;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0a1020; --surface: #111a30; --surface-2: #17223d; --ink: #e7edf8; --ink-2: #9fb0c9; --line: #26345a;
+    --brand: #e7edf8; --on-brand: #0a1020; --blue: #8fb0ff; --gold: #e2ae45; --gold-soft: #332708;
+    --ok: #6fd39a; --ok-soft: #12311f; --warn: #f0b45a; --warn-soft: #36270d; --bad: #ff8b7f; --bad-soft: #3a1714; --ring: #8fb0ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0a1020; --surface: #111a30; --surface-2: #17223d; --ink: #e7edf8; --ink-2: #9fb0c9; --line: #26345a;
+  --brand: #e7edf8; --on-brand: #0a1020; --blue: #8fb0ff; --gold: #e2ae45; --gold-soft: #332708;
+  --ok: #6fd39a; --ok-soft: #12311f; --warn: #f0b45a; --warn-soft: #36270d; --bad: #ff8b7f; --bad-soft: #3a1714; --ring: #8fb0ff;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-on-brand: var(--on-brand);
+  --color-blue: var(--blue);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --font-sans: var(--font-source), system-ui, sans-serif;
+  --font-display: var(--font-lexend), system-ui, sans-serif;
+}
+
+html { background: var(--bg); }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-source), system-ui, sans-serif; font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { font-family: var(--font-lexend), system-ui, sans-serif; letter-spacing: -0.01em; text-wrap: balance; }
+.num { font-variant-numeric: tabular-nums; }
+
+:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
+button, [role="tab"], summary, a { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .55; }
+
+/* Motion is decoration only: everything below stays readable without it. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+}
+
+.skip-link { position: absolute; left: -999px; top: 8px; background: var(--brand); color: var(--on-brand); padding: 8px 14px; border-radius: 6px; z-index: 50; }
+.skip-link:focus { left: 8px; }
+
+.spinner { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--blue); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }

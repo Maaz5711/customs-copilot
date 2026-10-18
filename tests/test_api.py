@@ -80,6 +80,7 @@ def test_validation_is_strict_and_never_echoes_input(client):
         assert r.status_code == 422 and secret not in r.text
     assert client.post("/api/agent/answer", json={"thread_id": "nothex", "answers": {"a": "b"}}).status_code == 422
     assert client.post("/api/agent/answer", json={"thread_id": TID, "answers": {"Bad Key!": "b"}}).status_code == 422
+    assert client.post("/api/agent/answer", json={"thread_id": TID, "answers": {"claim.fifth_schedule_rules:123": "yes", "goods.origin_country": "Germany"}}).status_code != 422
     assert client.post("/api/agent/answer", json={"thread_id": TID}).status_code == 422                                          # nothing answered
     assert client.post("/api/bill", json={"code": "84713010", "value_pkr": -5}).status_code == 422
     assert client.post("/api/bill", json={"code": "84713010", "value_pkr": 1e15}).status_code == 422
