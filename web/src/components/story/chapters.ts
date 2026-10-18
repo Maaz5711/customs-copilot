@@ -10,7 +10,6 @@ export type Chapter = {
   title: string;
   body: string;
   step: string; // the checklist line this chapter completes
-  photo: string; // file prefix in public/story (see public/ASSETS.md)
 };
 
 /** A source label pinned on the scene. slot = one of three fixed screen positions (CSS classes .pin-1 to .pin-3). */
@@ -20,62 +19,56 @@ export const CHAPTERS: Chapter[] = [
   {
     id: "arrive",
     from: 0,
-    to: 0.14,
+    to: 0.17,
     kicker: "Pakistan customs · import duty and tax",
     title: "The right customs code, and the whole bill behind it.",
     body: "Describe what you are importing. Customs Copilot finds the tariff line and works out every duty and tax, with the source of each figure.",
     step: "Goods described",
-    photo: "01_arrival",
   },
   {
     id: "code",
-    from: 0.14,
-    to: 0.3,
-    kicker: "1 · Find the tariff line",
+    from: 0.17,
+    to: 0.33,
+    kicker: "1 · Check the goods",
     title: "The goods get a code.",
-    body: "It asks the questions the tariff notes require, then searches 7,605 tariff lines, the legal notes and past rulings, and a separate check reviews the choice.",
+    body: "Like a careful clearing agent, it asks the questions the tariff notes require, then searches 7,605 tariff lines, the legal notes and past rulings, and a separate check reviews the choice.",
     step: "Tariff line found",
-    photo: "03_yard",
   },
   {
     id: "bill",
-    from: 0.3,
-    to: 0.52,
+    from: 0.33,
+    to: 0.5,
     kicker: "2 · Work out the bill",
     title: "The bill builds, layer by layer.",
     body: "Customs duty, regulatory duty, additional duty, sales tax, value addition tax and income tax. The arithmetic is exact code, never the AI.",
     step: "Duty and tax calculated",
-    photo: "04_doors",
   },
   {
     id: "sources",
-    from: 0.52,
-    to: 0.68,
+    from: 0.5,
+    to: 0.64,
     kicker: "3 · Show the evidence",
     title: "Every figure shows its source.",
     body: "Each rate points to the tariff page or notification it came from, and the answer lists what it could not verify.",
     step: "Sources cited",
-    photo: "05_papers",
   },
   {
     id: "unsure",
-    from: 0.68,
-    to: 0.82,
+    from: 0.64,
+    to: 0.76,
     kicker: "4 · Be honest about doubt",
     title: "When it is not sure, it says so.",
     body: "If the evidence stays thin after two retries, it shows its top candidates and asks you to check, instead of guessing a code or a rate.",
     step: "Doubt flagged, never guessed",
-    photo: "02_terminal",
   },
   {
     id: "clear",
-    from: 0.82,
+    from: 0.76,
     to: 1,
     kicker: "Your turn",
-    title: "Cleared. Now try your own goods.",
-    body: "Describe a product, look up a code, or calculate a bill. Rules as of the date you choose, for FY2025-26 and FY2026-27.",
-    step: "Ready for your goods",
-    photo: "06_cleared",
+    title: "Ready to clear. Now try your own goods.",
+    body: "Know the code and the full bill before your goods reach the gate. Describe a product, look up a code, or calculate a bill, with rules as of the date you choose (FY2025-26 and FY2026-27).",
+    step: "Ready to clear",
   },
 ];
 

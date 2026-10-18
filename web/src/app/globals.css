@@ -81,13 +81,10 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ---------------------------------------------------------------------------------------------------------------------------------- scroll story */
-/* The story is always a dark "cinema" section (night port photos), whatever theme the rest of the site uses. --is-dark tells the 3D scene. */
-.story {
-  --bg: #050b18; --surface: #0d1628; --surface-2: #15213a; --ink: #eef3fb; --ink-2: #a9b8cf; --line: #2a3a5e;
-  --brand: #eef3fb; --on-brand: #050b18; --blue: #8fb0ff; --gold: #e8b552; --gold-soft: #33270b;
-  --ok: #6fd39a; --ok-soft: #12311f; --warn: #f3b860; --warn-soft: #36270d; --ring: #8fb0ff; --is-dark: 1;
-  color-scheme: dark; position: relative; background: var(--bg); color: var(--ink); padding-bottom: 2rem;
-}
+/* The story is a drawing on paper: warm white in light theme, blueprint navy in dark theme (--paper is read by the 3D scene too). */
+.story { --paper: #f8f7f3; position: relative; background: var(--paper); color: var(--ink); padding-bottom: 2rem; border-bottom: 1px solid var(--line); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .story { --paper: #0c1a33; } }
+:root[data-theme="dark"] .story { --paper: #0c1a33; }
 .glass {
   background: color-mix(in srgb, var(--surface) 72%, transparent);
   -webkit-backdrop-filter: blur(16px) saturate(1.3);
@@ -97,39 +94,24 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .hud-label { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
 .story-stage { position: relative; }
-.story-photos, .story-scrim, .story-canvas, .story-hud, .story-pins { display: none; }
+.story-canvas, .story-hud, .story-pins { display: none; }
+.story-flat { display: block; }
 .story-skip { position: absolute; top: .75rem; right: .75rem; z-index: 6; padding: .5rem .9rem; font-size: 14px; font-weight: 600; min-height: 44px; display: inline-flex; align-items: center; }
 .story-skip:hover { background: color-mix(in srgb, var(--surface-2) 85%, transparent); }
 
-/* plain version: every chapter is a card in normal flow, with its photo on top */
-.story-panels { display: grid; gap: 1rem; max-width: 64rem; margin: 0 auto; padding: 4.5rem 1rem 0; }
-@media (min-width: 640px) { .story-panels { padding: 4.5rem 1.5rem 0; grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* plain version: the flat sketch, then every chapter as a card in normal flow */
+.story-panels { display: grid; gap: 1rem; max-width: 64rem; margin: 0 auto; padding: 1.5rem 1rem 0; }
+@media (min-width: 640px) { .story-panels { padding: 1.5rem 1.5rem 0; grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .story-panel { padding: 1.25rem 1.4rem; }
-.story-thumb { display: block; margin: -1.25rem -1.4rem 1rem; overflow: hidden; border-radius: 16px 16px 0 0; aspect-ratio: 16 / 8; }
-.story-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .story-title { font-size: clamp(1.7rem, 3.2vw, 2.4rem); line-height: 1.08; letter-spacing: -0.02em; }
 .story-card { margin-top: 1rem; padding: .9rem 1rem; border-radius: 12px; background: color-mix(in srgb, var(--surface-2) 78%, transparent); border: 1px solid var(--line); }
 
-/* pinned version: one sticky stage, photos behind, 3D wireframe and drawing frame over them, one chapter card at a time */
-.story[data-mode="pinned"] { height: 760svh; padding-bottom: 0; }
+/* pinned version: one sticky stage, the 3D port drawing and its frame behind, one chapter card at a time */
+.story[data-mode="pinned"] { height: 900svh; padding-bottom: 0; }
 .story[data-mode="pinned"] .story-stage { position: sticky; top: 0; height: 100svh; overflow: hidden; }
-.story[data-mode="pinned"] .story-thumb { display: none; }
+.story[data-mode="pinned"] .story-flat { display: none; }
 
-.story[data-mode="pinned"] .story-photos { display: block; position: absolute; inset: 0; }
-.story-photo { position: absolute; inset: 0; overflow: hidden; opacity: 0; z-index: 0;
-  clip-path: inset(100% 0 0 0);
-  /* leaving: fade out underneath the incoming photo, then reset the wipe */
-  transition: opacity .7s ease .45s, clip-path 0s linear 1.2s; }
-.story-photo[data-active="true"] { opacity: 1; z-index: 1; clip-path: inset(0 0 0 0);
-  /* arriving: wipe up from the bottom over the previous photo */
-  transition: clip-path 1.15s cubic-bezier(.77, 0, .18, 1), opacity .01s; }
-.story-photo img { width: 100%; height: 100%; object-fit: cover; display: block; transform: scale(1.08); transform-origin: 50% 55%; will-change: transform; }
-
-.story[data-mode="pinned"] .story-scrim { display: block; position: absolute; inset: 0; z-index: 1; pointer-events: none;
-  background:
-    linear-gradient(180deg, rgb(5 11 24 / .55) 0%, transparent 22%, transparent 60%, rgb(5 11 24 / .85) 100%),
-    linear-gradient(90deg, rgb(5 11 24 / .7) 0%, rgb(5 11 24 / .25) 45%, transparent 70%); }
-.story[data-mode="pinned"] .story-canvas { display: block; position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; mix-blend-mode: screen; }
+.story[data-mode="pinned"] .story-canvas { display: block; position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; }
 
 /* drawing-sheet frame */
 .story[data-mode="pinned"] .story-hud { display: block; position: absolute; inset: 0; z-index: 3; pointer-events: none; }
@@ -185,7 +167,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .pin-dot::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 1.5px solid var(--gold); animation: pin-pulse 2.2s ease-out infinite; }
 @keyframes pin-pulse { from { opacity: .9; transform: scale(.6); } to { opacity: 0; transform: scale(1.9); } }
 .pin-tag { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink);
-  padding: .3rem .55rem; border-radius: 6px; background: rgb(5 11 24 / .72); border: 1px solid color-mix(in srgb, var(--gold) 55%, transparent); white-space: nowrap; }
+  padding: .3rem .55rem; border-radius: 6px; background: color-mix(in srgb, var(--surface) 88%, transparent); border: 1px solid color-mix(in srgb, var(--gold) 55%, transparent); white-space: nowrap; }
 .pin-btn:hover .pin-tag, .pin-btn[aria-expanded="true"] .pin-tag { background: var(--gold); color: var(--on-brand); }
 .pin-detail { position: absolute; z-index: 1; left: 1.4rem; top: calc(100% + .1rem); width: max-content; max-width: 16rem; padding: .6rem .8rem; border-radius: 10px;
   opacity: 0; transform: translateY(-4px); pointer-events: none; transition: opacity .25s, transform .25s; }
@@ -194,6 +176,22 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .story-cue { position: absolute; z-index: 5; left: 50%; bottom: 1.6rem; translate: -50% 0; display: inline-flex; align-items: center; gap: .4rem; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); animation: cue 1.8s ease-in-out infinite; }
 @keyframes cue { 0%,100% { transform: translateY(0); opacity: .6; } 50% { transform: translateY(6px); opacity: 1; } }
 @media (max-width: 767px) { .story-cue { display: none; } }
+
+/* flat port sketch (plain version) */
+.sketch { overflow: visible; }
+.sketch rect, .sketch circle, .sketch path:not(.sk-line):not(.sk-wave) { stroke: var(--ink); stroke-width: 1.4; stroke-linejoin: round; }
+.sk-line { fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-linecap: round; }
+.sk-thin { stroke-width: 1; opacity: .45; }
+.sk-thick { stroke-width: 4; stroke: var(--bad); }
+.sk-wave { fill: none; stroke: #2f6fd6; stroke-width: 1.4; opacity: .6; }
+.sk-text { font: 700 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: var(--ink); stroke: none !important; }
+.sk-paper { fill: var(--paper); } .sk-skin { fill: #f1c9a5; } .sk-tyre { fill: var(--ink); }
+.sk-orange { fill: color-mix(in srgb, #ec7a3c 80%, var(--paper)); } .sk-blue { fill: color-mix(in srgb, #2f6fd6 62%, var(--paper)); }
+.sk-teal { fill: color-mix(in srgb, #16a394 62%, var(--paper)); } .sk-red { fill: color-mix(in srgb, #dd4b4b 70%, var(--paper)); }
+.sk-yellow { fill: color-mix(in srgb, #f2b632 70%, var(--paper)); } .sk-violet { fill: color-mix(in srgb, #7a5cc7 60%, var(--paper)); }
+.sk-navy { fill: color-mix(in srgb, #284a7e 80%, var(--paper)); } .sk-vest { fill: #b8d82e; } .sk-ok { fill: var(--ok); }
+.sk-sun { fill: color-mix(in srgb, #ffc857 60%, var(--paper)); stroke: none !important; }
+.sk-water { fill: color-mix(in srgb, #8cc4f2 40%, var(--paper)); stroke: none !important; }
 
 /* smooth scroll (Lenis) */
 html.lenis, html.lenis body { height: auto; }
