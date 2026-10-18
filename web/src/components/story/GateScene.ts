@@ -7,15 +7,17 @@ import { EXAMPLE, ramp } from "./chapters";
 
 // A customs gate, drawn in code (no downloaded models). One abstract crate arrives, is scanned and coded, a stack of duty layers rises above it,
 // source sheets fan out, the gate light turns amber when the tool is unsure and green when it is done. Everything is driven by one number: scroll progress 0..1.
-// No trucks, ships or maps on purpose: this is about a decision and its paperwork, not about moving goods.
+// No trucks, ships or maps on purpose: this is about a decision and its paperwork, not about moving goods. On the home page it is drawn as a see-through
+// wireframe over the port photos (the canvas is transparent and blended with "screen").
 
 type Tokens = { dark: boolean; ink: string; blue: string; gold: string; ok: string; warn: string; bg: string; surface: string };
 
-const readTokens = (): Tokens => {
-  const cs = getComputedStyle(document.documentElement);
+// Colours come from the element's CSS tokens (the story section sets its own dark set and --is-dark: 1).
+const readTokens = (el: Element): Tokens => {
+  const cs = getComputedStyle(el);
   const v = (n: string, d: string) => cs.getPropertyValue(n).trim() || d;
   const t = document.documentElement.dataset.theme;
-  const dark = t === "dark" || (t !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  const dark = cs.getPropertyValue("--is-dark").trim() === "1" || t === "dark" || (t !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
   return { dark, ink: v("--ink", "#0b1324"), blue: v("--blue", "#1e3a8a"), gold: v("--gold", "#8a5a05"), ok: v("--ok", "#17663b"), warn: v("--warn", "#8a4b00"), bg: v("--bg", "#f6f8fb"), surface: v("--surface", "#ffffff") };
 };
 
@@ -124,7 +126,7 @@ export class GateScene {
   }
 
   private build() {
-    this.t = readTokens();
+    this.t = readTokens(this.canvas);
     const T = this.t;
     this.scene.fog = new Fog(new Color(T.bg), 14, 46);
 
@@ -134,7 +136,7 @@ export class GateScene {
     for (let z = -44; z <= 14; z += 2) pts.push(-16, 0, z, 16, 0, z);
     const gg = new BufferGeometry();
     gg.setAttribute("position", new Float32BufferAttribute(pts, 3));
-    this.world.add(new LineSegments(gg, new LineBasicMaterial({ color: new Color(T.blue), transparent: true, opacity: T.dark ? 0.2 : 0.16 })));
+    this.world.add(new LineSegments(gg, new LineBasicMaterial({ color: new Color(T.blue), transparent: true, opacity: T.dark ? 0.12 : 0.16 })));
 
     // gate: two pylons, a lintel, a light, a barrier arm
     const gate = new Group();

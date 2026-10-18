@@ -33,6 +33,18 @@ export function Tool() {
     api.meta().then((m) => { setMeta(m); setDate(m.today); }).catch(() => {});
   }, []);
 
+  // "Try this product" buttons in the home-page story fill the describe box with their example.
+  useEffect(() => {
+    const onTry = (e: Event) => {
+      const text = (e as CustomEvent<string>).detail;
+      if (typeof text !== "string" || !text) return;
+      setSeed((s) => ({ text, n: s.n + 1 }));
+      setTab("agent");
+    };
+    window.addEventListener("cc:try", onTry);
+    return () => window.removeEventListener("cc:try", onTry);
+  }, []);
+
   const onKey = (e: React.KeyboardEvent) => {
     const i = TABS.findIndex((t) => t.id === tab);
     const j = e.key === "ArrowRight" ? (i + 1) % TABS.length : e.key === "ArrowLeft" ? (i + TABS.length - 1) % TABS.length : e.key === "Home" ? 0 : e.key === "End" ? TABS.length - 1 : -1;

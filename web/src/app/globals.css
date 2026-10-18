@@ -81,55 +81,117 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ---------------------------------------------------------------------------------------------------------------------------------- scroll story */
+/* The story is always a dark "cinema" section (night port photos), whatever theme the rest of the site uses. --is-dark tells the 3D scene. */
+.story {
+  --bg: #050b18; --surface: #0d1628; --surface-2: #15213a; --ink: #eef3fb; --ink-2: #a9b8cf; --line: #2a3a5e;
+  --brand: #eef3fb; --on-brand: #050b18; --blue: #8fb0ff; --gold: #e8b552; --gold-soft: #33270b;
+  --ok: #6fd39a; --ok-soft: #12311f; --warn: #f3b860; --warn-soft: #36270d; --ring: #8fb0ff; --is-dark: 1;
+  color-scheme: dark; position: relative; background: var(--bg); color: var(--ink); padding-bottom: 2rem;
+}
 .glass {
-  background: color-mix(in srgb, var(--surface) 74%, transparent);
-  -webkit-backdrop-filter: blur(14px) saturate(1.25);
-  backdrop-filter: blur(14px) saturate(1.25);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  backdrop-filter: blur(16px) saturate(1.3);
   border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
   border-radius: 16px;
 }
-.story { position: relative; }
+.hud-label { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
 .story-stage { position: relative; }
-.story-canvas { display: none; }
-.story-flat { display: block; }
-.story-skip { position: absolute; top: .75rem; right: .75rem; z-index: 5; padding: .5rem .9rem; font-size: 14px; font-weight: 600; min-height: 44px; display: inline-flex; align-items: center; }
+.story-photos, .story-scrim, .story-canvas, .story-hud, .story-pins { display: none; }
+.story-skip { position: absolute; top: .75rem; right: .75rem; z-index: 6; padding: .5rem .9rem; font-size: 14px; font-weight: 600; min-height: 44px; display: inline-flex; align-items: center; }
 .story-skip:hover { background: color-mix(in srgb, var(--surface-2) 85%, transparent); }
 
-/* plain version: every chapter is a card in normal flow */
-.story-panels { display: grid; gap: 1rem; max-width: 64rem; margin: 1.5rem auto 0; padding: 0 1rem; }
-@media (min-width: 640px) { .story-panels { padding: 0 1.5rem; grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* plain version: every chapter is a card in normal flow, with its photo on top */
+.story-panels { display: grid; gap: 1rem; max-width: 64rem; margin: 0 auto; padding: 4.5rem 1rem 0; }
+@media (min-width: 640px) { .story-panels { padding: 4.5rem 1.5rem 0; grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .story-panel { padding: 1.25rem 1.4rem; }
-.story-card { margin-top: 1rem; padding: .9rem 1rem; border-radius: 12px; background: color-mix(in srgb, var(--surface-2) 80%, transparent); border: 1px solid var(--line); }
+.story-thumb { display: block; margin: -1.25rem -1.4rem 1rem; overflow: hidden; border-radius: 16px 16px 0 0; aspect-ratio: 16 / 8; }
+.story-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.story-title { font-size: clamp(1.7rem, 3.2vw, 2.4rem); line-height: 1.08; letter-spacing: -0.02em; }
+.story-card { margin-top: 1rem; padding: .9rem 1rem; border-radius: 12px; background: color-mix(in srgb, var(--surface-2) 78%, transparent); border: 1px solid var(--line); }
 
-/* pinned version: one sticky stage with the scene behind and one chapter card at a time */
-.story[data-mode="pinned"] { height: 720svh; }
+/* pinned version: one sticky stage, photos behind, 3D wireframe and drawing frame over them, one chapter card at a time */
+.story[data-mode="pinned"] { height: 760svh; padding-bottom: 0; }
 .story[data-mode="pinned"] .story-stage { position: sticky; top: 0; height: 100svh; overflow: hidden; }
-.story[data-mode="pinned"] .story-canvas { display: block; position: absolute; inset: 0; width: 100%; height: 100%; }
-.story[data-mode="pinned"] .story-flat { display: none; }
-.story[data-mode="pinned"] .story-panels { position: absolute; inset: auto 0 1rem 0; display: block; margin: 0; max-width: none; padding: 0 1rem; }
+.story[data-mode="pinned"] .story-thumb { display: none; }
+
+.story[data-mode="pinned"] .story-photos { display: block; position: absolute; inset: 0; }
+.story-photo { position: absolute; inset: 0; overflow: hidden; opacity: 0; z-index: 0;
+  clip-path: inset(100% 0 0 0);
+  /* leaving: fade out underneath the incoming photo, then reset the wipe */
+  transition: opacity .7s ease .45s, clip-path 0s linear 1.2s; }
+.story-photo[data-active="true"] { opacity: 1; z-index: 1; clip-path: inset(0 0 0 0);
+  /* arriving: wipe up from the bottom over the previous photo */
+  transition: clip-path 1.15s cubic-bezier(.77, 0, .18, 1), opacity .01s; }
+.story-photo img { width: 100%; height: 100%; object-fit: cover; display: block; transform: scale(1.08); transform-origin: 50% 55%; will-change: transform; }
+
+.story[data-mode="pinned"] .story-scrim { display: block; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background:
+    linear-gradient(180deg, rgb(5 11 24 / .55) 0%, transparent 22%, transparent 60%, rgb(5 11 24 / .85) 100%),
+    linear-gradient(90deg, rgb(5 11 24 / .7) 0%, rgb(5 11 24 / .25) 45%, transparent 70%); }
+.story[data-mode="pinned"] .story-canvas { display: block; position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; mix-blend-mode: screen; }
+
+/* drawing-sheet frame */
+.story[data-mode="pinned"] .story-hud { display: block; position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.hud-corner { position: absolute; width: 22px; height: 22px; border-color: color-mix(in srgb, var(--ink) 55%, transparent); border-style: solid; border-width: 0; }
+.hud-tl { top: 14px; left: 14px; border-top-width: 1.5px; border-left-width: 1.5px; }
+.hud-tr { top: 14px; right: 14px; border-top-width: 1.5px; border-right-width: 1.5px; }
+.hud-bl { bottom: 14px; left: 14px; border-bottom-width: 1.5px; border-left-width: 1.5px; }
+.hud-br { bottom: 14px; right: 14px; border-bottom-width: 1.5px; border-right-width: 1.5px; }
+.hud-meta { position: absolute; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; line-height: 1.6; letter-spacing: .1em; color: color-mix(in srgb, var(--ink) 70%, transparent); }
+.hud-meta-tl { top: 22px; left: 46px; }
+.hud-meta-br { bottom: 22px; right: 46px; text-align: right; }
+@media (max-width: 767px) { .hud-meta { display: none; } }
+
+.story[data-mode="pinned"] .story-panels { position: absolute; inset: auto 0 1rem 0; z-index: 4; display: block; margin: 0; max-width: none; padding: 0 1rem; }
 .story[data-mode="pinned"] .story-panel {
-  position: absolute; left: 1rem; right: 1rem; bottom: 0; max-height: 52svh; overflow: auto;
-  opacity: 0; transform: translateY(22px); pointer-events: none;
+  position: absolute; left: 1rem; right: 1rem; bottom: 0; max-height: 54svh; overflow: auto;
+  opacity: 0; transform: translateY(26px); pointer-events: none;
   transition: opacity .7s cubic-bezier(.22,.61,.36,1), transform .9s cubic-bezier(.22,.61,.36,1);
 }
-.story[data-mode="pinned"] .story-panel[data-active="true"] { opacity: 1; transform: none; pointer-events: auto; }
+.story[data-mode="pinned"] .story-panel[data-active="true"] { opacity: 1; transform: none; pointer-events: auto; transition-delay: .25s; }
 @media (min-width: 768px) {
   .story[data-mode="pinned"] .story-panels { inset: 0; padding: 0; }
-  .story[data-mode="pinned"] .story-panel { left: max(2rem, calc((100vw - 72rem) / 2)); right: auto; bottom: auto; top: 50%; width: min(31rem, 44vw); max-height: 78svh; translate: 0 -50%; }
+  .story[data-mode="pinned"] .story-panel { left: max(2.5rem, calc((100vw - 74rem) / 2)); right: auto; bottom: auto; top: 50%; width: min(33rem, 46vw); max-height: 80svh; translate: 0 -50%; padding: 1.6rem 1.8rem; }
+  .story[data-mode="pinned"] .story-title { font-size: clamp(2.2rem, 3.6vw, 3.5rem); }
 }
-.story-bar { position: absolute; top: 0; left: 0; right: 0; z-index: 4; display: flex; gap: 4px; padding: 6px 1rem; }
-.story-bar span { flex: 1; height: 3px; border-radius: 2px; background: var(--line); transition: background .6s; }
-.story-bar span.is-on { background: var(--blue); }
 
-.story-check { position: absolute; z-index: 4; right: max(1rem, calc((100vw - 72rem) / 2)); top: 5.2rem; width: 17rem; padding: 1rem 1.1rem; }
-.story-step { display: flex; align-items: center; gap: .6rem; font-size: 14px; color: var(--ink-2); transition: color .6s; }
-.story-tick { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); flex: none; transition: all .6s cubic-bezier(.22,.61,.36,1); }
+.story-bar { position: absolute; top: 0; left: 0; right: 0; z-index: 5; display: flex; gap: 4px; padding: 6px 1rem; }
+.story-bar span { flex: 1; height: 3px; border-radius: 2px; background: var(--line); transition: background .6s; }
+.story-bar span.is-on { background: var(--gold); }
+
+/* clearance log (checklist): each step jumps to its chapter */
+.story-check { position: absolute; z-index: 5; right: max(2.5rem, calc((100vw - 74rem) / 2)); top: 5.2rem; width: 17.5rem; padding: .9rem .8rem; }
+.story-check .hud-label { padding: 0 .4rem; }
+.story-step { display: flex; width: 100%; align-items: center; gap: .55rem; padding: .32rem .4rem; border-radius: 8px; font-size: 14px; text-align: left; color: var(--ink-2); transition: color .6s, background .3s; }
+.story-step:hover { background: color-mix(in srgb, var(--surface-2) 80%, transparent); color: var(--ink); }
+.story-no { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; letter-spacing: .06em; color: color-mix(in srgb, var(--ink-2) 80%, transparent); }
+.story-tick { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--line); flex: none; transition: all .6s cubic-bezier(.22,.61,.36,1); }
 .story-step.is-now { color: var(--ink); font-weight: 600; }
-.story-step.is-now .story-tick { border-color: var(--blue); box-shadow: 0 0 0 4px color-mix(in srgb, var(--blue) 18%, transparent); }
+.story-step.is-now .story-tick { border-color: var(--gold); box-shadow: 0 0 0 4px color-mix(in srgb, var(--gold) 22%, transparent); }
 .story-step.is-done { color: var(--ink); }
 .story-step.is-done .story-tick { background: var(--ok); border-color: var(--ok); color: var(--bg); }
 
-.story-cue { position: absolute; z-index: 4; left: 50%; bottom: 1.2rem; translate: -50% 0; display: inline-flex; align-items: center; gap: .4rem; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); animation: cue 1.8s ease-in-out infinite; }
+/* source pins: three slots in a column under the clearance log (desktop), across the top (phones) */
+.story[data-mode="pinned"] .story-pins { display: block; position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.pin { position: absolute; pointer-events: auto; animation: pin-in .8s cubic-bezier(.22,.61,.36,1) both; }
+.pin-d0 { animation-delay: .7s; } .pin-d1 { animation-delay: 1s; } .pin-d2 { animation-delay: 1.3s; }
+@keyframes pin-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.pin-1, .pin-2, .pin-3 { right: max(2.5rem, calc((100vw - 74rem) / 2)); width: 17.5rem; }
+.pin-1 { top: 23.5rem; } .pin-2 { top: 27rem; } .pin-3 { top: 30.5rem; }
+@media (max-width: 767px) { .pin-1, .pin-2, .pin-3 { right: auto; left: 1rem; width: auto; } .pin-1 { top: 1.6rem; } .pin-2 { top: 4.6rem; } .pin-3 { top: 7.6rem; } }
+.pin-btn { display: inline-flex; align-items: center; gap: .55rem; min-height: 44px; padding: 0 .2rem; }
+.pin-dot { position: relative; width: 12px; height: 12px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 30%, transparent); flex: none; }
+.pin-dot::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 1.5px solid var(--gold); animation: pin-pulse 2.2s ease-out infinite; }
+@keyframes pin-pulse { from { opacity: .9; transform: scale(.6); } to { opacity: 0; transform: scale(1.9); } }
+.pin-tag { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink);
+  padding: .3rem .55rem; border-radius: 6px; background: rgb(5 11 24 / .72); border: 1px solid color-mix(in srgb, var(--gold) 55%, transparent); white-space: nowrap; }
+.pin-btn:hover .pin-tag, .pin-btn[aria-expanded="true"] .pin-tag { background: var(--gold); color: var(--on-brand); }
+.pin-detail { position: absolute; z-index: 1; left: 1.4rem; top: calc(100% + .1rem); width: max-content; max-width: 16rem; padding: .6rem .8rem; border-radius: 10px;
+  opacity: 0; transform: translateY(-4px); pointer-events: none; transition: opacity .25s, transform .25s; }
+.pin-detail[data-open="true"], .pin-btn:hover + .pin-detail, .pin-btn:focus-visible + .pin-detail { opacity: 1; transform: none; pointer-events: auto; }
+
+.story-cue { position: absolute; z-index: 5; left: 50%; bottom: 1.6rem; translate: -50% 0; display: inline-flex; align-items: center; gap: .4rem; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); animation: cue 1.8s ease-in-out infinite; }
 @keyframes cue { 0%,100% { transform: translateY(0); opacity: .6; } 50% { transform: translateY(6px); opacity: 1; } }
 @media (max-width: 767px) { .story-cue { display: none; } }
 
@@ -140,9 +202,9 @@ html.lenis, html.lenis body { height: auto; }
 
 /* small or short screens: keep each chapter card inside the screen without inner scrolling */
 @media (max-width: 767px), (max-height: 640px) {
-  .story[data-mode="pinned"] .story-panel { padding: .85rem 1rem; max-height: 62svh; }
+  .story[data-mode="pinned"] .story-panel { padding: .85rem 1rem; max-height: 60svh; }
   .story[data-mode="pinned"] .story-panel[data-card="true"] .story-body { display: none; }
-  .story[data-mode="pinned"] .story-title { font-size: 1.6rem; margin-top: .25rem; }
+  .story[data-mode="pinned"] .story-title { font-size: 1.65rem; margin-top: .25rem; }
   .story[data-mode="pinned"] .story-card { margin-top: .55rem; padding: .5rem .8rem; }
   .story[data-mode="pinned"] .story-row > * { padding-top: .22rem; padding-bottom: .22rem; }
   .story[data-mode="pinned"] .story-card table { font-size: 14px; }
