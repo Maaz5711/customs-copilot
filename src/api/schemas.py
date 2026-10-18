@@ -7,7 +7,7 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 ISO_DATE = r"^\d{4}-\d{2}-\d{2}$"
-KEY = re.compile(r"^[a-z][a-z0-9_.]{0,59}$")
+KEY = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,79}$")       # answer ids look like "claim.fifth_schedule_rules:123" or "goods.origin_country"
 _CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 Short = Annotated[str, Field(max_length=500)]
