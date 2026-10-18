@@ -10,7 +10,11 @@ export type Chapter = {
   title: string;
   body: string;
   step: string; // the checklist line this chapter completes
+  photo: string; // file prefix in public/story (see public/ASSETS.md)
 };
+
+/** A source label pinned on the scene. slot = one of three fixed screen positions (CSS classes .pin-1 to .pin-3). */
+export type Pin = { slot: 1 | 2 | 3; tag: string; text: string; src: string };
 
 export const CHAPTERS: Chapter[] = [
   {
@@ -21,6 +25,7 @@ export const CHAPTERS: Chapter[] = [
     title: "The right customs code, and the whole bill behind it.",
     body: "Describe what you are importing. Customs Copilot finds the tariff line and works out every duty and tax, with the source of each figure.",
     step: "Goods described",
+    photo: "01_arrival",
   },
   {
     id: "code",
@@ -30,6 +35,7 @@ export const CHAPTERS: Chapter[] = [
     title: "The goods get a code.",
     body: "It asks the questions the tariff notes require, then searches 7,605 tariff lines, the legal notes and past rulings, and a separate check reviews the choice.",
     step: "Tariff line found",
+    photo: "03_yard",
   },
   {
     id: "bill",
@@ -39,6 +45,7 @@ export const CHAPTERS: Chapter[] = [
     title: "The bill builds, layer by layer.",
     body: "Customs duty, regulatory duty, additional duty, sales tax, value addition tax and income tax. The arithmetic is exact code, never the AI.",
     step: "Duty and tax calculated",
+    photo: "04_doors",
   },
   {
     id: "sources",
@@ -48,6 +55,7 @@ export const CHAPTERS: Chapter[] = [
     title: "Every figure shows its source.",
     body: "Each rate points to the tariff page or notification it came from, and the answer lists what it could not verify.",
     step: "Sources cited",
+    photo: "05_papers",
   },
   {
     id: "unsure",
@@ -57,6 +65,7 @@ export const CHAPTERS: Chapter[] = [
     title: "When it is not sure, it says so.",
     body: "If the evidence stays thin after two retries, it shows its top candidates and asks you to check, instead of guessing a code or a rate.",
     step: "Doubt flagged, never guessed",
+    photo: "02_terminal",
   },
   {
     id: "clear",
@@ -66,6 +75,7 @@ export const CHAPTERS: Chapter[] = [
     title: "Cleared. Now try your own goods.",
     body: "Describe a product, look up a code, or calculate a bill. Rules as of the date you choose, for FY2025-26 and FY2026-27.",
     step: "Ready for your goods",
+    photo: "06_cleared",
   },
 ];
 
@@ -101,3 +111,25 @@ export const chapterAt = (p: number) => CHAPTERS.findLast((c) => p >= c.from) ??
 
 /** Rupee amounts with a fixed format, so the server and the browser print exactly the same text. */
 export const fmtPKR = (n: number) => n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+const line = (tax: string) => EXAMPLE.lines.find((l) => l.tax === tax)!;
+const linePin = (slot: Pin["slot"], tax: string): Pin => {
+  const l = line(tax);
+  return { slot, tag: `${l.tax} ${l.rate}`, text: `${l.label}: PKR ${fmtPKR(l.amount)}`, src: l.source };
+};
+
+/** The pins for each chapter. All figures come from EXAMPLE (the real run). */
+export const PINS: Record<string, Pin[]> = {
+  arrive: [{ slot: 2, tag: "Goods", text: EXAMPLE.product, src: `Assessed value PKR ${fmtPKR(EXAMPLE.value)}` }],
+  code: [
+    { slot: 1, tag: `PCT ${EXAMPLE.code}`, text: EXAMPLE.codeName, src: line("CD").source },
+    { slot: 3, tag: "Question", text: `${EXAMPLE.questions[0]![0]} ${EXAMPLE.questions[0]![1]}`, src: "Asked because the rules depend on it" },
+  ],
+  bill: [linePin(1, "CD"), linePin(2, "RD"), linePin(3, "ST")],
+  sources: [linePin(1, "VAT"), linePin(2, "IT"), linePin(3, "ACD")],
+  unsure: [{ slot: 2, tag: "Not sure?", text: `Top 3: ${EXAMPLE.candidates.join(" · ")}`, src: "Illustration: shown instead of a guess" }],
+  clear: [{ slot: 2, tag: "Total payable", text: `PKR ${fmtPKR(EXAMPLE.total)}`, src: `Real run, rules as of ${EXAMPLE.asOf}` }],
+};
+
+/** What the "Try this product" buttons put into the tool. */
+export const TRY_TEXT = `${EXAMPLE.product}, for resale`;
