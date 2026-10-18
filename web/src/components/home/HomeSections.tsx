@@ -1,11 +1,12 @@
-import { BadgeCheck, Calculator, CalendarClock, FileSearch, HelpCircle, Mail, ScrollText, ShieldCheck } from "lucide-react";
+import { BadgeCheck, Calculator, CalendarClock, ExternalLink, FileSearch, HelpCircle, Mail, ScrollText, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
 // The context sections of the home page: why it is different, what it covers, the note to FBR and Pakistan Customs, FAQ and contact.
 // Every claim here is backed by the code or by measured results (docs/eval_versions.md, docs/gd_findings.md, /method).
 
-const DEVELOPER = { name: "Maaz Ahmed", email: "maazahmad3838@gmail.com" };
+// Paste the LinkedIn profile address here; the button appears only when it is set.
+const DEVELOPER = { name: "Maaz Ahmed", email: "maazahmad3838@gmail.com", github: "https://github.com/Maaz5711", linkedin: "" };
 
 function SectionHead({ id, kicker, title, lead }: { id: string; kicker: string; title: string; lead?: ReactNode }) {
   return (
@@ -58,7 +59,7 @@ const FAQ: [string, ReactNode][] = [
 
 export function WhySection() {
   return (
-    <section aria-labelledby="why-h" id="why" className="scroll-mt-6">
+    <section aria-labelledby="why-h" id="why" className="scroll-mt-24">
       <SectionHead id="why-h" kicker="Why Customs Copilot" title="The right code and the full bill, with proof for every rupee."
         lead="Most online helpers stop at a keyword search or a customs duty estimate. Customs Copilot works the way a careful clearing agent does: it checks the goods, finds the tariff line and builds the complete bill from FBR's own documents." />
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -94,7 +95,7 @@ export function WhySection() {
 
 export function CoverageSection() {
   return (
-    <section aria-labelledby="cover-h" id="coverage" className="scroll-mt-6">
+    <section aria-labelledby="cover-h" id="coverage" className="scroll-mt-24">
       <SectionHead id="cover-h" kicker="What it covers" title="Every import charge, from the document that sets it." />
       <dl className="mt-8 grid gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-2">
         {COVERS.map(([k, v]) => (
@@ -110,7 +111,7 @@ export function CoverageSection() {
 
 export function ForFbrSection() {
   return (
-    <section aria-labelledby="fbr-h" id="fbr" className="scroll-mt-6 rounded-2xl border border-line bg-surface p-6 sm:p-8">
+    <section aria-labelledby="fbr-h" id="fbr" className="scroll-mt-24 rounded-2xl border border-line bg-surface p-6 sm:p-8">
       <div className="flex flex-wrap items-start gap-4">
         <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-xl bg-ok-soft text-ok" aria-hidden="true"><ShieldCheck size={24} /></span>
         <div className="min-w-0 flex-1">
@@ -121,6 +122,25 @@ export function ForFbrSection() {
             keeps almost no user data, does the arithmetic exactly, and publishes its measured accuracy openly. It is an independent project and is not
             affiliated with or endorsed by FBR. Officials who would like to evaluate it are welcome to get in touch.
           </p>
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            <div className="rounded-xl border border-line bg-surface-2/60 p-4">
+              <p className="hud-label">Checked against FBR&rsquo;s own calculator</p>
+              <p className="num mt-1 font-display text-3xl font-semibold">30 of 33</p>
+              <p className="mt-1 text-sm text-ink-2">FY2026-27 codes where customs duty, regulatory duty, additional customs duty and sales tax matched FBR&rsquo;s public WeBOC duty calculator to the rupee (16 Oct 2026). The three differences are vehicle parts, still under review.</p>
+            </div>
+            <div className="rounded-xl border border-line bg-surface-2/60 p-4 md:col-span-2">
+              <p className="hud-label">Where it fits in the clearance process</p>
+              <ol className="mt-2 grid gap-2 sm:grid-cols-3">
+                {[["1", "Prepare", "Find the PCT code and the full bill here, with the source of every rate."], ["2", "File", "Lodge the Goods Declaration through WeBOC or the Pakistan Single Window, as usual."], ["3", "Assess", "Pakistan Customs assesses and clears the goods. Their decision is final."]].map(([n, t, d]) => (
+                  <li key={n} className="rounded-lg border border-line bg-surface p-3">
+                    <p className="flex items-center gap-2 font-semibold"><span className="num inline-flex size-6 items-center justify-center rounded-full bg-brand text-xs text-on-brand">{n}</span>{t}</p>
+                    <p className="mt-1 text-sm text-ink-2">{d}</p>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+          <p className="mt-4 text-sm text-ink-2">Official tariff, SROs and Acts: <a href="https://www.fbr.gov.pk" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-blue underline-offset-2 hover:underline">fbr.gov.pk <ExternalLink size={13} aria-hidden="true" /></a></p>
           <div className="mt-5 flex flex-wrap gap-3">
             <a href="#contact" className="inline-flex min-h-11 items-center rounded-lg bg-brand px-5 py-2 text-[15px] font-semibold text-on-brand hover:opacity-90">Contact the developer</a>
             <Link href="/method" className="inline-flex min-h-11 items-center rounded-lg border border-line px-5 py-2 text-[15px] font-semibold hover:bg-surface-2">How it works and how it was tested</Link>
@@ -133,7 +153,7 @@ export function ForFbrSection() {
 
 export function FaqSection() {
   return (
-    <section aria-labelledby="faq-h" id="faq" className="scroll-mt-6">
+    <section aria-labelledby="faq-h" id="faq" className="scroll-mt-24">
       <SectionHead id="faq-h" kicker="FAQ" title="Questions people ask" />
       <div className="mt-6 divide-y divide-line rounded-xl border border-line bg-surface">
         {FAQ.map(([q, a]) => (
@@ -152,7 +172,7 @@ export function FaqSection() {
 
 export function ContactSection() {
   return (
-    <section aria-labelledby="contact-h" id="contact" className="scroll-mt-6">
+    <section aria-labelledby="contact-h" id="contact" className="scroll-mt-24">
       <SectionHead id="contact-h" kicker="Contact" title="Talk to the developer"
         lead="Feedback, real cases where the tool got it wrong, or interest from FBR, Pakistan Customs, clearing agents and importers: all welcome." />
       <div className="mt-6 flex flex-wrap items-center gap-5 rounded-xl border border-line bg-surface p-5 sm:p-6">
@@ -161,9 +181,19 @@ export function ContactSection() {
           <p className="font-display text-xl font-semibold">{DEVELOPER.name}</p>
           <p className="text-ink-2">Developer of Customs Copilot · computer science student</p>
         </div>
-        <a href={`mailto:${DEVELOPER.email}?subject=Customs%20Copilot`} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-brand px-5 py-2 text-[15px] font-semibold text-on-brand hover:opacity-90">
-          <Mail size={17} aria-hidden="true" /> {DEVELOPER.email}
-        </a>
+        <div className="flex flex-wrap gap-2">
+          <a href={`mailto:${DEVELOPER.email}?subject=Customs%20Copilot`} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-brand px-5 py-2 text-[15px] font-semibold text-on-brand hover:opacity-90">
+            <Mail size={17} aria-hidden="true" /> {DEVELOPER.email}
+          </a>
+          <a href={DEVELOPER.github} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-line px-4 py-2 text-[15px] font-semibold hover:bg-surface-2">
+            GitHub <ExternalLink size={14} aria-hidden="true" />
+          </a>
+          {DEVELOPER.linkedin && (
+            <a href={DEVELOPER.linkedin} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-line px-4 py-2 text-[15px] font-semibold hover:bg-surface-2">
+              LinkedIn <ExternalLink size={14} aria-hidden="true" />
+            </a>
+          )}
+        </div>
       </div>
     </section>
   );

@@ -20,12 +20,12 @@ const localToday = () => {
 
 const go = (id: string) => {
   const el = document.getElementById(id);
-  if (el) glideTo(el.getBoundingClientRect().top + window.scrollY - 12);
+  if (el) glideTo(el.getBoundingClientRect().top + window.scrollY - 84); // below the sticky header
 };
 
 function ToolBlock({ id, step, icon, title, lead, main, children }: { id: string; step: string; icon: ReactNode; title: string; lead: string; main?: boolean; children: ReactNode }) {
   return (
-    <section id={id} aria-labelledby={`${id}-h`} className={`scroll-mt-6 rounded-2xl border bg-surface shadow-[0_1px_0_rgba(15,23,42,0.04),0_12px_32px_-18px_rgba(15,23,42,0.25)] ${main ? "border-gold/60" : "border-line"}`}>
+    <section id={id} aria-labelledby={`${id}-h`} className={`scroll-mt-24 rounded-2xl border bg-surface shadow-[0_1px_0_rgba(15,23,42,0.04),0_12px_32px_-18px_rgba(15,23,42,0.25)] ${main ? "border-gold/60" : "border-line"}`}>
       <div className="flex flex-wrap items-start gap-3 border-b border-line px-4 py-4 sm:px-6">
         <span className={`inline-flex size-10 shrink-0 items-center justify-center rounded-xl ${main ? "bg-gold-soft text-gold" : "bg-surface-2 text-ink"}`} aria-hidden="true">{icon}</span>
         <div className="min-w-0 flex-1">
@@ -38,6 +38,12 @@ function ToolBlock({ id, step, icon, title, lead, main, children }: { id: string
     </section>
   );
 }
+
+const PICKS = [
+  ["describe", MessageSquareText, "Describe a product", "You know what the goods are, not the code. Get the code and the full bill."],
+  ["lookup", Search, "Look up a code", "You know the code or a tariff keyword. See the line, its duty and its page."],
+  ["calculate", Calculator, "Calculate duty", "You have the code and the value. Get every duty and tax with sources."],
+] as const;
 
 export function ToolSections() {
   const uid = useId();
@@ -63,11 +69,28 @@ export function ToolSections() {
   const outside = meta && (date < meta.covers_from || date > meta.covers_to);
 
   return (
-    <div id="tool" className="grid scroll-mt-6 gap-8">
+    <div id="tool" className="grid scroll-mt-24 gap-8">
+      <div>
+        <p className="hud-label text-gold">The tools</p>
+        <h2 className="mt-1 font-display text-3xl font-semibold leading-tight sm:text-4xl">What do you want to do?</h2>
+        <div className="mt-6 grid gap-3 md:grid-cols-3">
+          {PICKS.map(([id, Icon, title, when], i) => (
+            <a key={id} href={`#${id}`} onClick={(e) => { e.preventDefault(); go(id); }}
+              className={`group flex min-h-24 items-start gap-3 rounded-xl border p-4 transition-colors hover:border-gold hover:bg-gold-soft/40 ${i === 0 ? "border-gold/60 bg-surface" : "border-line bg-surface"}`}>
+              <span className={`inline-flex size-10 shrink-0 items-center justify-center rounded-xl ${i === 0 ? "bg-gold-soft text-gold" : "bg-surface-2 text-ink"}`} aria-hidden="true"><Icon size={20} /></span>
+              <span>
+                <span className="block font-display text-lg font-semibold">{title} <span aria-hidden="true" className="inline-block transition-transform group-hover:translate-x-1">→</span></span>
+                <span className="block text-[15px] text-ink-2">{when}</span>
+              </span>
+            </a>
+          ))}
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-line bg-surface-2/60 px-4 py-4 sm:px-6">
         <div className="max-w-2xl">
-          <h2 className="font-display text-xl font-semibold">Three tools, one set of rules</h2>
-          <p className="text-[15px] text-ink-2">Pick the date your goods are assessed. All three tools use the rules in force on that date (FY2025-26 and FY2026-27).</p>
+          <h3 className="font-display text-lg font-semibold">One date for all three tools</h3>
+          <p className="text-[15px] text-ink-2">Pick the date your goods are assessed. Every tool uses the rules in force on that date (FY2025-26 and FY2026-27).</p>
         </div>
         <Field label="Rules as of" htmlFor={`${uid}-date`}>
           <TextInput id={`${uid}-date`} type="date" className="!min-h-10 !py-1 w-44" value={date} min={meta?.covers_from} max={meta?.covers_to} onChange={(e) => e.target.value && setDate(e.target.value)} />

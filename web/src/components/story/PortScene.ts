@@ -1,7 +1,7 @@
 import {
   BoxGeometry, BufferGeometry, CanvasTexture, CircleGeometry, Color, CylinderGeometry, DoubleSide, DynamicDrawUsage, EdgesGeometry, ExtrudeGeometry, Float32BufferAttribute,
   Fog, Group, IcosahedronGeometry, LineBasicMaterial, LineSegments, Material, MathUtils, Mesh, MeshBasicMaterial, Object3D, PerspectiveCamera,
-  PlaneGeometry, Scene, Shape, SRGBColorSpace, Texture, Vector3, WebGLRenderer,
+  PlaneGeometry, RepeatWrapping, Scene, Shape, SRGBColorSpace, Texture, Vector3, WebGLRenderer,
 } from "three";
 import { EXAMPLE, clamp01, fmtPKR, ramp } from "./chapters";
 
@@ -25,9 +25,8 @@ const readTokens = (el: Element): Tokens => {
 
 const HUE = {
   orange: "#ec7a3c", blue: "#2f6fd6", teal: "#16a394", red: "#dd4b4b", yellow: "#f2b632", violet: "#7a5cc7", navy: "#284a7e",
-  vest: "#b8d82e", sky: "#8cc4f2", sun: "#ffc857",
+  vest: "#b8d82e", sky: "#8cc4f2", sun: "#ffc857", crane: "#e2352b", hull: "#e0603a", white: "#f4f4f1", teal2: "#37b8b4", hazard: "#f5c518",
 };
-const BOX_HUES = [HUE.blue, HUE.teal, HUE.red, HUE.yellow, HUE.violet, HUE.orange];
 const SLAB_HUES = [HUE.blue, HUE.teal, HUE.violet, HUE.orange, HUE.yellow, HUE.red];
 
 const FONT = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif';
@@ -50,8 +49,8 @@ const ROAD_Z = -4, GATE_X = 24, CRANE_X = 6, TROLLEY_Y = 12.2;
 const AGENT_PATH: [number, number][] = [[25.5, 3.6], [11, 2.2], [8.4, 0.8], [7.6, -1.45]]; // walks round the crane leg to the front right of the container
 
 const CAMERA: [number, [number, number, number], [number, number, number]][] = [
-  [0, [-36, 15, 32], [-24, 3, -12]],
-  [0.08, [-10, 15, 30], [3, 5, -10]],
+  [0, [-38, 24, 34], [-22, 1, -12]],
+  [0.08, [-12, 21, 30], [3, 3, -10]],
   [0.16, [16, 12, 24], [6, 4, -6]],
   [0.235, [20, 6, 12], [10, 1.8, -1]],
   [0.265, [7.7, 4.3, -1.15], [7.32, 1.5, -1.9]],
@@ -215,13 +214,28 @@ export class PortScene {
     }
 
     // quay concrete and road asphalt under the ink lines
-    const quay = new Mesh(new PlaneGeometry(420, 70), this.fill(T.dark ? "#3a3d42" : "#cfc6b6", T.dark ? 0.35 : 0.45));
+    const quay = new Mesh(new PlaneGeometry(420, 70), this.fill(T.dark ? "#3a3d42" : "#7b7e86", T.dark ? 0.35 : 0.3));
     quay.rotation.x = -Math.PI / 2;
     quay.position.set(20, 0, 27);
-    const road = new Mesh(new PlaneGeometry(420, 3.6), this.fill(T.dark ? "#2a2c30" : "#8e9096", T.dark ? 0.2 : 0.45));
+    const road = new Mesh(new PlaneGeometry(420, 3.6), this.fill(T.dark ? "#2a2c30" : "#5c5f67", T.dark ? 0.2 : 0.2));
     road.rotation.x = -Math.PI / 2;
     road.position.set(20, 0.004, ROAD_Z);
     this.world.add(quay, road);
+    // yellow hazard stripes on the apron along the quay edge and beside the road
+    const stripes = drawTexture(128, 64, (c) => {
+      c.clearRect(0, 0, 128, 64);
+      c.fillStyle = HUE.hazard;
+      for (let k = -1; k < 3; k++) { c.beginPath(); c.moveTo(k * 64, 64); c.lineTo(k * 64 + 26, 64); c.lineTo(k * 64 + 26 + 64, 0); c.lineTo(k * 64 + 64, 0); c.closePath(); c.fill(); }
+    });
+    stripes.wrapS = RepeatWrapping;
+    stripes.repeat.set(160, 1);
+    this.tex(stripes);
+    for (const z of [-6.9, -0.9]) {
+      const band = new Mesh(new PlaneGeometry(320, 1.6), new MeshBasicMaterial({ map: stripes, transparent: true, opacity: T.dark ? 0.55 : 0.95, depthWrite: false }));
+      band.rotation.x = -Math.PI / 2;
+      band.position.set(15, 0.006, z);
+      this.world.add(band);
+    }
 
     // sky: a soft gradient behind everything
     const sky = this.tex(drawTexture(8, 256, (c) => {
@@ -244,7 +258,7 @@ export class PortScene {
     }
 
     // water with sketched waves
-    const water = new Mesh(new PlaneGeometry(420, 120), this.fill(T.dark ? "#2c5a85" : "#3f86c9", T.dark ? 0.55 : 0.42));
+    const water = new Mesh(new PlaneGeometry(420, 120), this.fill(T.dark ? "#1f6f6d" : HUE.teal2, T.dark ? 0.5 : 0.12));
     water.rotation.x = -Math.PI / 2;
     water.position.set(20, -1.2, -68);
     this.world.add(water);
@@ -253,7 +267,7 @@ export class PortScene {
       const x = -90 + r() * 200, z = -60 + r() * 50, y = -1.18, s = 0.5 + r() * 0.7;
       wv.push(x, y, z, x + s, y, z - 0.25, x + s, y, z - 0.25, x + 2 * s, y, z);
     }
-    const wl = this.lines(wv, T.dark ? 0.5 : 0.4, HUE.blue);
+    const wl = this.lines(wv, T.dark ? 0.45 : 0.75, "#ffffff");
     this.waves.add(wl);
     this.world.add(this.waves);
 
@@ -284,7 +298,7 @@ export class PortScene {
     yard.forEach(([x, z], i) => {
       const tiers = 1 + Math.floor(r() * 3);
       for (let k = 0; k < tiers; k++) {
-        const c = this.container(BOX_HUES[(i * 3 + k) % BOX_HUES.length]!, T.dark ? 0.45 : 0.28);
+        const c = this.container((i + k) % 4 === 1 ? HUE.orange : HUE.white, T.dark ? 0.45 : (i + k) % 4 === 1 ? 0.2 : 0);
         c.position.set(x, k * C.H, z);
         this.world.add(c);
       }
@@ -381,7 +395,7 @@ export class PortScene {
     hull.moveTo(-13, -1.3); hull.lineTo(10, -1.3); hull.lineTo(13.6, 2.5); hull.lineTo(-13, 2.5); hull.lineTo(-13, -1.3);
     const hg = new ExtrudeGeometry(hull, { depth: 6, bevelEnabled: false });
     hg.translate(0, 0, -3);
-    this.ship.add(this.solid(hg, HUE.navy, T.dark ? 0.3 : 0.12, 0.95, 25));
+    this.ship.add(this.solid(hg, HUE.hull, T.dark ? 0.3 : 0.05, 0.95, 25));
     this.ship.add(this.lines([-13, -0.5, 3.01, 10.75, -0.5, 3.01], 0.9, HUE.red)); // boot-top line
     // bridge and funnel at the stern
     const bridge = this.box(3, 4.6, 5.4, "#ffffff", T.dark ? 0.8 : 0.1);
@@ -398,7 +412,7 @@ export class PortScene {
         const hero = bx === 6 && rz === 2.5;
         const tiers = hero ? 1 : 1 + Math.floor(r() * 3);
         for (let k = 0; k < tiers; k++) {
-          const c = this.container(BOX_HUES[n++ % BOX_HUES.length]!, T.dark ? 0.5 : 0.38);
+          const c = this.container(n++ % 3 === 2 ? HUE.white : n % 5 === 0 ? HUE.blue : HUE.orange, T.dark ? 0.45 : 0.12);
           c.position.set(bx, 2.5 + k * C.H, rz);
           this.ship.add(c);
         }
@@ -414,15 +428,15 @@ export class PortScene {
   private buildCrane() {
     const T = this.t;
     const crane = new Group();
-    const blue = T.dark ? 0.55 : 0.4;
+    const blue = T.dark ? 0.45 : 0.08; // fill strength for the crane (red, like real ship-to-shore cranes)
     for (const x of [2.2, 9.8]) for (const z of [-0.2, -7.8]) {
-      const leg = this.box(0.45, 12.6, 0.45, HUE.blue, blue);
+      const leg = this.box(0.45, 12.6, 0.45, HUE.crane, blue);
       leg.position.set(x, 0, z);
       crane.add(leg);
     }
-    for (const z of [-0.2, -7.8]) { const b = this.box(8.05, 0.6, 0.45, HUE.blue, blue); b.position.set(6, 11.6, z); crane.add(b); }
-    for (const x of [2.2, 9.8]) { const b = this.box(0.45, 0.5, 7.6, HUE.blue, blue); b.position.set(x, 6.4, -4); crane.add(b); }
-    for (const x of [4.7, 7.3]) { const rail = this.box(0.4, 0.5, 22, HUE.blue, blue); rail.position.set(x, 12.6, -8); crane.add(rail); }
+    for (const z of [-0.2, -7.8]) { const b = this.box(8.05, 0.6, 0.45, HUE.crane, blue); b.position.set(6, 11.6, z); crane.add(b); }
+    for (const x of [2.2, 9.8]) { const b = this.box(0.45, 0.5, 7.6, HUE.crane, blue); b.position.set(x, 6.4, -4); crane.add(b); }
+    for (const x of [4.7, 7.3]) { const rail = this.box(0.4, 0.5, 22, HUE.crane, blue); rail.position.set(x, 12.6, -8); crane.add(rail); }
     const house = this.box(3.4, 1.6, 3, "#ffffff", T.dark ? 0.8 : 0.1);
     house.position.set(6, 13.1, 1.6);
     crane.add(house);
