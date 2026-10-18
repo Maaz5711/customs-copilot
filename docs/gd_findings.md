@@ -57,5 +57,15 @@ The first run stopped when the DeepSeek balance reached zero (HTTP 402); after a
 * **China FTA lines whose code is missing from the 2019 table** (1,162 of 5,491): a rate guessed from the same 6-digit family gave the charged duty on 136 of 182 single-rate families (75%) and on about half of the multi-rate families; 421 had no family at all. So no inferred rate is offered or applied; the family's rates are shown as information with that reliability, and the importer is told to ask the clearing agent. UPDATE 2026-10-17: the amendments were found (FBR Amending/Archived SROs list): SRO 1181(I)/2022 replaced the whole table with HS 2022 codes. With that table loaded the real-data match of China FTA lines is 95.8% (5,259 of 5,491; 81 mismatches, all with our rate at or above the charged one; 151 lines with no row, 2.7%), up from 77.6%, and the family-rate information above is only used for the remaining codes with no row. See docs/a8b_cpfta2022_findings.md.
 * **Mobile phones** stay `cannot_compute`: the 171 phone lines in the extract are SKD/CKD assembly kits (income tax 0%, sales tax 18%, no value addition tax), not finished phones, so the Part II mobile tables could not be tested against real assessments.
 
+## 4e. Does a newer model help? DeepSeek V4.1 Flash-1017 on Fireworks (2026-10-18)
+Same full agent, same 100 random importer cases (seed 5), paired with our current model (DeepSeek flash, thinking on for Classify). First pass had 7 crashes caused by the adapter cutting answers at 4,096 tokens (fixed to 12,000; those 7 cases were rerun, none left).
+| Level | Current | V4.1 Flash | Cases only current got right / only V4.1 got right |
+|---|---|---|---|
+| 4-digit heading, first | 70 | 71 | 1 / 2 |
+| 6-digit, first | 51 | 50 | 3 / 2 |
+| 8-digit line, first | 46 | 45 | 3 / 2 |
+| 8-digit line, in top 3 | 54 | 58 | 3 / 7 |
+Conclusion: no measurable difference (differences of 1 to 4 cases of 100 are noise; a paired difference needs more than about 10 points to mean something at n=100). The model is not what limits accuracy. Cost about 0.6 USD (Fireworks serverless 0.30 in / 1.20 out per million tokens); Kimi K3 costs about 10 times more per case and was stopped after a 4-case trial to protect the credit.
+
 ## 5. Limits
 Chapter 85 only (electronics and electrical goods), one month, one importer's shipments (many importers and 5,484 GDs, but the file is one source). Declared codes are not verified. The importer facts used for the duty check are inferred, not known.
