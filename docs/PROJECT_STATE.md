@@ -64,6 +64,11 @@ Customs Copilot (Pakistan): an agent that picks the 8-digit PCT code and compute
 * Further tax for unregistered importers (4% at the 18% rate) is now added and included in the income-tax base (real assessed GDs, docs/gd_findings.md); non-filer income tax doubled (Tenth Schedule rule 1).
 * Importer classification (DeepSeek flash): 150 cases for all three systems (11% / 24% / 42% exact line) and the full agent on 276 cases (44%). Stopped: DeepSeek balance is $0 (HTTP 402). Resume only after a top-up, off-peak: three shards `python -m src.eval.run --llm deepseek --tag importer_s{i} --kinds importer --classify-thinking enabled --systems full_graph --shard i/3 --skip-done-in data/processed/eval/deepseek_importer --max-llm-calls 450`, then `--merge-from` the shard folders (about 680 cases, about 2.2 USD).
 
+## Status 2026-10-18 (home page v6: search first)
+* First screen is now "What are you importing?": the agent runs right there (English or Roman Urdu; checked live: Roman Urdu clothes question gets sensible follow-ups), chips and six "common import" cards with starter questions start it in one click, plus a trust strip. The 3D story is unchanged and follows as "How it works"; Why, the lookup and calculator tools, coverage, FBR, FAQ and contact follow. Shared tool state lives in `web/src/components/home/ToolsContext.tsx`.
+* Mobile phones are left out of the starters on purpose (their tax table is not computed). Ask Pakistan (pakistangov.online) was reviewed as a reference; we kept our own identity (no shared layout, no government look) and the owner was advised to run a free public beta before pitching FBR.
+* Polish to do: some agent "why I ask" notes mention internal file names (e.g. docs/duty_formula.md); strip them from user-facing text.
+
 ## Status 2026-10-18 (home page v5, final pass)
 * 3D port restyled after the owner's isometric reference: red ship-to-shore cranes, yellow hazard stripes on the apron, teal water, orange-red hull, white yard boxes, higher opening camera.
 * FBR section: WeBOC cross-check (CD, RD, ACD, ST matched FBR's public WeBOC calculator to the rupee on 30 of 33 FY2026-27 codes, docs/weboc_comparison.md) and where the tool fits (prepare here, file on WeBOC/PSW, Customs assesses); link to fbr.gov.pk.

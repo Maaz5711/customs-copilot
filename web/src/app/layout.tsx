@@ -39,13 +39,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               </span>
             </Link>
             <nav aria-label="Main" className="flex items-center text-[14px] sm:gap-1 sm:text-[15px]">
-              <Link href="/#describe" className="hidden whitespace-nowrap rounded-lg px-3 py-2 text-ink-2 hover:bg-surface-2 hover:text-ink lg:inline-block">Tools</Link>
+              <Link href="/#tool" className="hidden whitespace-nowrap rounded-lg px-3 py-2 text-ink-2 hover:bg-surface-2 hover:text-ink lg:inline-block">Tools</Link>
               <Link href="/#faq" className="hidden whitespace-nowrap rounded-lg px-3 py-2 text-ink-2 hover:bg-surface-2 hover:text-ink lg:inline-block">FAQ</Link>
               <Link href="/#contact" className="hidden whitespace-nowrap rounded-lg px-3 py-2 text-ink-2 hover:bg-surface-2 hover:text-ink md:inline-block">Contact</Link>
               <Link href="/method" className="whitespace-nowrap rounded-lg px-2 py-2 text-ink-2 hover:bg-surface-2 hover:text-ink sm:px-3">How it works</Link>
               <Link href="/security" className="whitespace-nowrap rounded-lg px-2 py-2 text-ink-2 hover:bg-surface-2 hover:text-ink sm:px-3">Privacy</Link>
               <ThemeToggle />
-              <Link href="/#describe" className="ml-1 hidden min-h-10 items-center whitespace-nowrap rounded-lg bg-brand px-4 text-[14px] font-semibold text-on-brand hover:opacity-90 sm:inline-flex">Find my duty</Link>
+              <Link href="/#ask" className="ml-1 hidden min-h-10 items-center whitespace-nowrap rounded-lg bg-brand px-4 text-[14px] font-semibold text-on-brand hover:opacity-90 sm:inline-flex">Find my duty</Link>
             </nav>
           </div>
         </header>
