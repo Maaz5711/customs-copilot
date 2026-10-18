@@ -167,7 +167,7 @@ def make_st_prefilter(facts: Facts | None):
         if cond.startswith(LOCAL_SUPPLY_PREFIX):
             return "local_supply_wording_probably_not_an_import_rule (row needs_review: a human must confirm)"
         if g.startswith("ST-SRO297-T2") or g == "ST-SRO297-T2-1525-HYBRID":
-            return "SRO 297 Table-II is a rule for the supply of locally made vehicles, not an import rule (docs/duty_formula.md section 5)"
+            return "SRO 297 Table-II is a rule for the supply of locally made vehicles, not an import rule"
         if facts is None:
             return None
         if f"sales_tax_rules:{r['id']}" in facts.claimed:

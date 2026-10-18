@@ -41,15 +41,15 @@ ORDER = [
 
 ASSUME_TEXT = {
     "ROUNDING": "No source document states a rounding rule (OPEN-5). Each line is rounded half-up to 0.01 PKR (or 1 PKR with rounding='rupee') and the rounded amounts feed the next base.",
-    "FED": "FED is applied only where a First Schedule Table I / IA row is stored for the code. Serials printed 'Respective heading(s)' match only through the description-match mapping (a6_fed_mapping.csv); serials left unmapped (aerated waters from juices S.No 6, filter rod 56, sugary juices 59, electric cars 55A) are never matched. FED notifications issued during the year are not in data/raw (OQ-A6-9).",
+    "FED": "FED is applied only where a First Schedule Table I / IA row is stored for the code. Serials printed 'Respective heading(s)' match only through the description-match mapping; serials left unmapped (aerated waters from juices S.No 6, filter rod 56, sugary juices 59, electric cars 55A) are never matched. FED notifications issued during the year have not been collected (OQ-A6-9).",
     "FED_DATE": "The FED rate in force on the as_of_date is used; FED Act s.10 speaks of the date of supply for home consumption, the Act does not name the import date (OQ-A6-6).",
-    "FED_MAPPED": "This FED row was mapped to the tariff code by description match (docs/a6_fed_findings.md OQ-A6-3). The owner has not verified the mapping.",
+    "FED_MAPPED": "This FED row was mapped to the tariff code by description match (OQ-A6-3). The owner has not verified the mapping.",
     "FED_RETAIL": "The retail price is the total price printed on the packs of the consignment, as given by the caller (FED Act s.12(4)); the tool cannot check it.",
-    "SED_BASE": "Special Excise Duty (Table IA) is taken on V + CD + RD + ACD; the Act does not say whether the Table I FED is also in its base (OQ-A6-2), and no Board notification on collection is in data/raw (OQ-A6-5). The line note shows the alternative amount.",
+    "SED_BASE": "Special Excise Duty (Table IA) is taken on V + CD + RD + ACD; the Act does not say whether the Table I FED is also in its base (OQ-A6-2), and no Board notification on collection has been collected (OQ-A6-5). The line note shows the alternative amount.",
     "OPEN2": "RD and ACD are counted as 'customs-duties' inside the sales tax and income tax bases (inference from Customs Act s.18A, OPEN-2).",
     "OPEN10": "Value addition tax (Sales Tax Act s.7A(2), Twelfth Schedule: 3% ad valorem at import) is taken on the same base as sales tax and counted as sales tax inside the income tax base. The Schedule says only 'ad valorem' (OPEN-10).",
-    "OPEN4": "Further tax (s.3(1A), 4%) is written in the Act for supplies to unregistered persons. The Act text does not say it is collected at import; real assessed Goods Declarations show Customs collecting it (3% + 4% = 7% of V_ST at the 18% rate), so it is added (OPEN-4, docs/gd_findings.md).",
-    "OPEN4_OBSERVED": "For unregistered importers at a sales-tax rate other than 18% the extra amount is the rate seen on real assessed Goods Declarations (7/18 of the sales tax in total with the value addition tax), not a rate printed in the Act (docs/gd_findings.md section 4d).",
+    "OPEN4": "Further tax (s.3(1A), 4%) is written in the Act for supplies to unregistered persons. The Act text does not say it is collected at import; real assessed Goods Declarations show Customs collecting it (3% + 4% = 7% of V_ST at the 18% rate), so it is added (OPEN-4).",
+    "OPEN4_OBSERVED": "For unregistered importers at a sales-tax rate other than 18% the extra amount is the rate seen on real assessed Goods Declarations (7/18 of the sales tax in total with the value addition tax), not a rate printed in the Act.",
     "REGIME": "Ordinary commercial import assumed: none of the ACD para 3 'not levied' regimes (Fifth Schedule, Baggage Rules, SROs 577/565/693/492/678 or 655/656) was claimed.",
     "VATFACTS": "No value-addition-tax exclusion that depends on the importer was claimed (manufacturer raw material for in-house use, registered service provider in-house use).",
     "TWELFTH_P3": "Income-tax class Part III (residual) was chosen because no Part I or Part II entry matched the code. Twelfth Schedule entries that name goods only in words cannot be matched by code (OPEN-9).",
@@ -63,9 +63,9 @@ ASSUME_TEXT = {
 NOT_APPLIED = [
     "Customs-duty concessions in the store (Fifth Schedule from 1 Jul 2026, China FTA Phase II SRO 1640(I)/2019) are offered under `concessions` and never applied unless the caller lists the rule id in claimed_rules. Other FTAs/PTAs (Malaysia, Indonesia, Sri Lanka, SAFTA, Iran, Mauritius, Uzbekistan, Afghanistan) and other concession SROs are not in the store.",
     "Conditional sales tax exemptions and reduced rates (Sixth, Eighth and Fifth Schedule rows with conditions) are NOT applied unless the caller lists the rule id in claimed_rules; see possible_rules_not_applied.",
-    "Federal excise duty: Third Schedule exemptions are never applied (listed under possible_rules_not_applied); FED notifications issued during the year are not in data/raw (OQ-A6-9); electric vehicles are not computed (OQ-A6-1).",
+    "Federal excise duty: Third Schedule exemptions are never applied (listed under possible_rules_not_applied); FED notifications issued during the year have not been collected (OQ-A6-9); electric vehicles are not computed (OQ-A6-1).",
     "Schedule entries that name goods only in words (no PCT code) cannot be matched by code and are not checked.",
-    "Section 53A ITO (possible 1% reduction of withholding taxes from 1 Jul 2026) is not applied: no notification under it is in data/raw (OQ-A3-7).",
+    "Section 53A ITO (possible 1% reduction of withholding taxes from 1 Jul 2026) is not applied: no notification under it has been collected (OQ-A3-7).",
     "Minimum values notified under ITO s.148(6A) and the Customs valuation rulings are not applied: the caller supplies the assessable value.",
 ]
 
@@ -275,7 +275,7 @@ def _compute_core(code, assessable_value_pkr, as_of_date, importer=None, quantit
     reg = str(facts.i("registration_status") or "").strip().lower()
     if reg not in ("registered", "unregistered"):
         bill.need("importer.registration_status", "Is the importer registered under the Sales Tax Act 1990 (registered) or not (unregistered)?",
-                  "Sales Tax Act s.3(1A): further tax applies to unregistered persons (docs/duty_formula.md step 7).", ["registered", "unregistered"], ["further_tax"])
+                  "Sales Tax Act s.3(1A): further tax applies to unregistered persons.", ["registered", "unregistered"], ["further_tax"])
 
     # ---------------- CD
     cd_amt = None
@@ -604,7 +604,7 @@ def _compute_core(code, assessable_value_pkr, as_of_date, importer=None, quantit
                 comm = facts.ib("commercial_importer")
                 if cls >= 2 and comm is None:
                     bill.need("importer.commercial_importer", "Is the importer a commercial importer (imports for sale in the same condition)? (yes/no)",
-                              "First Schedule Part II: Part II goods 2% or 3.5% for a commercial importer; Part III 5.5% or 6% (docs/duty_formula.md OPEN-7).", [True, False], ["income_tax"])
+                              "First Schedule Part II: Part II goods 2% or 3.5% for a commercial importer; Part III 5.5% or 6% (OPEN-7).", [True, False], ["income_tax"])
                 else:
                     want = "commercial importer" if (cls >= 2 and comm) else "persons (any importer)"
                     pr = [r for r in rate_rows if r["importer_category"] == want]
