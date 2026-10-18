@@ -64,6 +64,12 @@ Customs Copilot (Pakistan): an agent that picks the 8-digit PCT code and compute
 * Further tax for unregistered importers (4% at the 18% rate) is now added and included in the income-tax base (real assessed GDs, docs/gd_findings.md); non-filer income tax doubled (Tenth Schedule rule 1).
 * Importer classification (DeepSeek flash): 150 cases for all three systems (11% / 24% / 42% exact line) and the full agent on 276 cases (44%). Stopped: DeepSeek balance is $0 (HTTP 402). Resume only after a top-up, off-peak: three shards `python -m src.eval.run --llm deepseek --tag importer_s{i} --kinds importer --classify-thinking enabled --systems full_graph --shard i/3 --skip-done-in data/processed/eval/deepseek_importer --max-llm-calls 450`, then `--merge-from` the shard folders (about 680 cases, about 2.2 USD).
 
+## Status 2026-10-18 (home page v5, final pass)
+* 3D port restyled after the owner's isometric reference: red ship-to-shore cranes, yellow hazard stripes on the apron, teal water, orange-red hull, white yard boxes, higher opening camera.
+* FBR section: WeBOC cross-check (CD, RD, ACD, ST matched FBR's public WeBOC calculator to the rupee on 30 of 33 FY2026-27 codes, docs/weboc_comparison.md) and where the tool fits (prepare here, file on WeBOC/PSW, Customs assesses); link to fbr.gov.pk.
+* Usability: sticky header with one call to action ("Find my duty"), "What do you want to do?" picker for the three tools, back-to-top button; story stage sits under the 4rem header.
+* Contact: email, GitHub profile (repo is private, so the profile is linked). LinkedIn: paste the address into DEVELOPER.linkedin in web/src/components/home/HomeSections.tsx and the button appears.
+
 ## Status 2026-10-18 (home page v4: flagship layout, owner's direction)
 * Branded "Customs Copilot · Pakistan Customs Duty Calculator", built to assist FBR and Pakistan Customs; "Independent, not an FBR service, not endorsed by FBR" in the footer, FBR section and FAQ (owner plans to pitch to government later).
 * Home page: story, then Why it is different (claims only from measured results), the three tools as separate sections (Describe a product = main tool; Look up a code; Calculate duty; one shared "rules as of" date), What it covers (instrument per tax), For FBR and Pakistan Customs, FAQ, Contact (developer Maaz Ahmed, maazahmad3838@gmail.com; owner may add LinkedIn/GitHub). Footer credits the developer.

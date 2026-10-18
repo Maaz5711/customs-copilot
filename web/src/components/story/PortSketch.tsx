@@ -12,13 +12,13 @@ export function PortSketch({ className }: { className?: string }) {
       {[20, 90, 160, 230, 300].map((x, i) => <path key={x} d={`M${x} ${165 + (i % 2) * 12} q8 -6 16 0 t16 0`} className="sk-wave" />)}
 
       {/* ship */}
-      <path d="M40 150 L340 150 L364 118 L40 118 Z" className="sk-navy" />
+      <path d="M40 150 L340 150 L364 118 L40 118 Z" className="sk-hull" />
       <rect x="48" y="80" width="34" height="38" className="sk-paper" />
       <rect x="58" y="66" width="12" height="14" className="sk-red" />
       {ship.map(([x, c], i) => <rect key={i} x={x - 52} y={i < 4 ? 98 : 78} width="44" height="20" className={c} transform={`translate(${i < 4 ? 0 : 46 * (i - 4)} 0)`} />)}
 
       {/* crane */}
-      <g className="sk-line">
+      <g className="sk-line sk-crane">
         <path d="M390 190 V40 M470 190 V40 M390 40 H470 M390 110 H470" />
         <path d="M250 40 H500 M430 40 L430 12 L250 40 M430 12 L500 40" />
       </g>
