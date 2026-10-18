@@ -47,19 +47,21 @@ const track = (p: number, keys: [number, number][]) => {
 // Positions (scene units are about a metre): quay edge at z = -8, water behind it, road along z = -4, crane centred on x = 6, gate at x = 24.
 const C = { L: 6, H: 2.6, W: 2.44 }; // container
 const ROAD_Z = -4, GATE_X = 24, CRANE_X = 6, TROLLEY_Y = 12.2;
-const AGENT_PATH: [number, number][] = [[25.5, 3.6], [12, 1.4], [8.7, -1.5]]; // ends at the right corner, clear of the code label
+const AGENT_PATH: [number, number][] = [[25.5, 3.6], [11, 2.2], [8.4, 0.8], [7.6, -1.45]]; // walks round the crane leg to the front right of the container
 
 const CAMERA: [number, [number, number, number], [number, number, number]][] = [
   [0, [-36, 15, 32], [-24, 3, -12]],
-  [0.09, [-10, 15, 30], [3, 5, -10]],
-  [0.17, [16, 12, 24], [6, 4, -6]],
-  [0.27, [20, 6, 12], [9, 1.8, -2]],
-  [0.33, [13.5, 4, 7.5], [6.5, 1.8, -2.8]],
-  [0.46, [16, 9, 16], [6, 4.6, -4]],
-  [0.58, [4, 8, 15], [6, 4.4, -3]],
-  [0.7, [10, 10, 19], [6, 6, -4]],
-  [0.8, [-2, 10, 25], [4, 3, -4]],
-  [0.875, [10, 8, 20], [14, 2.6, -4]],
+  [0.08, [-10, 15, 30], [3, 5, -10]],
+  [0.16, [16, 12, 24], [6, 4, -6]],
+  [0.235, [20, 6, 12], [10, 1.8, -1]],
+  [0.265, [7.7, 4.3, -1.15], [7.32, 1.5, -1.9]],
+  [0.33, [7.58, 3.95, -1.45], [7.32, 1.45, -1.9]],
+  [0.38, [3, 4, 7.5], [6, 1.8, -2.8]],
+  [0.52, [16, 9, 16], [6, 4.6, -4]],
+  [0.62, [4, 8, 15], [6, 4.4, -3]],
+  [0.72, [10, 10, 19], [6, 6, -4]],
+  [0.81, [-2, 10, 25], [4, 3, -4]],
+  [0.88, [10, 8, 20], [14, 2.6, -4]],
   [1, [60, 8, 22], [72, 2, -4]],
 ]
 
@@ -76,7 +78,7 @@ function drawTexture(w: number, h: number, draw: (ctx: CanvasRenderingContext2D)
 /** A tiny repeatable random sequence, so the yard and the waves look the same on every visit. */
 const rand = (seed: number) => () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
 
-type Agent = { root: Group; legL: Group; legR: Group; armL: Group; armR: Group; tablet: Mesh };
+type Agent = { root: Group; legL: Group; legR: Group; armL: Group; armR: Group; board: Group };
 
 export class PortScene {
   private renderer: WebGLRenderer;
@@ -115,6 +117,12 @@ export class PortScene {
   private light!: MeshBasicMaterial;
   private waves = new Group();
   private gulls: Group[] = [];
+  private flags: Group[] = [];
+  private regCanvas: HTMLCanvasElement | null = null;
+  private regTex: CanvasTexture | null = null;
+  private regCount = -1;
+  private heroShadow!: Mesh;
+  private agentShadow!: Mesh;
 
   static supported(): boolean {
     try {
@@ -206,8 +214,37 @@ export class PortScene {
       this.world.add(b);
     }
 
+    // quay concrete and road asphalt under the ink lines
+    const quay = new Mesh(new PlaneGeometry(420, 70), this.fill(T.dark ? "#3a3d42" : "#cfc6b6", T.dark ? 0.35 : 0.45));
+    quay.rotation.x = -Math.PI / 2;
+    quay.position.set(20, 0, 27);
+    const road = new Mesh(new PlaneGeometry(420, 3.6), this.fill(T.dark ? "#2a2c30" : "#8e9096", T.dark ? 0.2 : 0.45));
+    road.rotation.x = -Math.PI / 2;
+    road.position.set(20, 0.004, ROAD_Z);
+    this.world.add(quay, road);
+
+    // sky: a soft gradient behind everything
+    const sky = this.tex(drawTexture(8, 256, (c) => {
+      const g = c.createLinearGradient(0, 0, 0, 256);
+      if (T.dark) { g.addColorStop(0, "#14171b"); g.addColorStop(1, "#262a30"); }
+      else { g.addColorStop(0, "#bcd9f2"); g.addColorStop(0.75, "#eaf2f8"); g.addColorStop(1, "#f7efe2"); }
+      c.fillStyle = g; c.fillRect(0, 0, 8, 256);
+    }));
+    const skyPlane = new Mesh(new PlaneGeometry(900, 160), new MeshBasicMaterial({ map: sky, fog: false, depthWrite: false }));
+    skyPlane.position.set(20, 70, -230);
+    this.world.add(skyPlane);
+
+    // the far shore: a quiet skyline so the horizon is never empty
+    const shore = rand(31);
+    for (let x = -140; x < 180; x += 5 + shore() * 5) {
+      const h = 3 + shore() * 12, w = 3 + shore() * 4;
+      const b = this.box(w, h, 3, T.dark ? "#4b5563" : "#9fb3c8", T.dark ? 0.55 : 0.55, 0.35);
+      b.position.set(x, -1.2, -100 - shore() * 10);
+      this.world.add(b);
+    }
+
     // water with sketched waves
-    const water = new Mesh(new PlaneGeometry(420, 120), this.fill(HUE.sky, T.dark ? 0.72 : 0.62));
+    const water = new Mesh(new PlaneGeometry(420, 120), this.fill(T.dark ? "#2c5a85" : "#3f86c9", T.dark ? 0.55 : 0.42));
     water.rotation.x = -Math.PI / 2;
     water.position.set(20, -1.2, -68);
     this.world.add(water);
@@ -220,7 +257,16 @@ export class PortScene {
     this.waves.add(wl);
     this.world.add(this.waves);
 
-    // a sun (or a moon in blueprint mode) and a few gulls, for life
+    // high-mast lights on the quay
+    for (const [x, z] of [[-18, 7], [17, 7], [44, 7]] as const) {
+      const pole = this.box(0.22, 16, 0.22, "#9aa3ad", 0.3, 0.7);
+      pole.position.set(x, 0, z);
+      const head = this.box(1.8, 0.4, 0.6, HUE.yellow, 0.4, 0.8);
+      head.position.set(x, 16, z);
+      this.world.add(pole, head, this.shadow(0.8, 0.8, x, z));
+    }
+
+    // a sun (or a moon in dark mode) and a few gulls, for life
     const sun = new Mesh(new CircleGeometry(10, 48), new MeshBasicMaterial({ color: this.wash(T.dark ? "#dfe8ff" : HUE.sun, T.dark ? 0.75 : 0.35), fog: false }));
     sun.position.set(-40, 30, -150);
     this.world.add(sun);
@@ -238,7 +284,7 @@ export class PortScene {
     yard.forEach(([x, z], i) => {
       const tiers = 1 + Math.floor(r() * 3);
       for (let k = 0; k < tiers; k++) {
-        const c = this.container(BOX_HUES[(i * 3 + k) % BOX_HUES.length]!, T.dark ? 0.55 : 0.42);
+        const c = this.container(BOX_HUES[(i * 3 + k) % BOX_HUES.length]!, T.dark ? 0.45 : 0.28);
         c.position.set(x, k * C.H, z);
         this.world.add(c);
       }
@@ -249,8 +295,11 @@ export class PortScene {
     this.buildGate();
 
     // the hero container and its label (goods declared -> tariff line -> cleared)
-    const hero = this.container(HUE.orange, T.dark ? 0.3 : 0.18);
+    const hero = this.container(HUE.orange, T.dark ? 0.25 : 0.08);
     this.hero.add(hero);
+    this.heroShadow = this.shadow(C.L + 0.6, C.W + 0.6, 6, ROAD_Z);
+    this.agentShadow = this.shadow(0.9, 0.9, 0, 0, true);
+    this.world.add(this.heroShadow, this.agentShadow);
     this.labels = [
       this.tex(drawTexture(640, 250, (c) => this.paintLabel(c, "GOODS DECLARED", EXAMPLE.product, "PCT ????.????", false))),
       this.tex(drawTexture(640, 250, (c) => this.paintLabel(c, "TARIFF LINE", `PCT ${EXAMPLE.code}`, EXAMPLE.codeName, false))),
@@ -356,6 +405,9 @@ export class PortScene {
       }
     }
     this.ship.position.set(-34, 0, -12.5);
+    const sternFlag = this.flag(1.4, 0.93, 2.6);
+    sternFlag.position.set(-13.2, 2.5, 0);
+    this.ship.add(sternFlag);
     this.world.add(this.ship);
   }
 
@@ -428,6 +480,9 @@ export class PortScene {
     const bw: number[] = [];
     bw.push(GATE_X + 2.2, 1.2, 2.61, GATE_X + 4.2, 1.2, 2.61, GATE_X + 2.2, 2.3, 2.61, GATE_X + 4.2, 2.3, 2.61, GATE_X + 2.2, 1.2, 2.61, GATE_X + 2.2, 2.3, 2.61, GATE_X + 4.2, 1.2, 2.61, GATE_X + 4.2, 2.3, 2.61);
     gate.add(booth, roof, this.lines(bw, 0.8));
+    const gateFlag = this.flag(2.4, 1.6, 8);
+    gateFlag.position.set(GATE_X + 5.4, 0, 3.6);
+    gate.add(gateFlag, this.shadow(3.4, 3.2, GATE_X + 3.2, 1.4));
     this.world.add(gate);
   }
 
@@ -455,14 +510,30 @@ export class PortScene {
     const armL = new Group(), armR = new Group();
     armL.add(limb(0.12, 0.6, 0.14, HUE.navy)); armR.add(limb(0.12, 0.6, 0.14, HUE.navy));
     armL.position.set(-0.33, 1.48, 0); armR.position.set(0.33, 1.48, 0);
-    const tablet = new Mesh(new BoxGeometry(0.34, 0.03, 0.26), this.fill(HUE.teal, 0.2));
-    tablet.position.set(0, -0.62, 0.1);
-    tablet.add(new LineSegments(new EdgesGeometry(tablet.geometry), this.ink()));
-    armR.add(tablet);
-    body.add(legL, legR, torso, vest, stripes, head, hat, armL, armR);
+    // the inspection register: a clipboard held in front of the chest, tilted up toward the agent's eyes
+    this.regCanvas = document.createElement("canvas");
+    this.regCanvas.width = 360; this.regCanvas.height = 470;
+    this.regTex = this.tex(new CanvasTexture(this.regCanvas));
+    this.regTex.colorSpace = SRGBColorSpace;
+    this.regCount = -1;
+    this.paintRegister(0);
+    const board = new Group();
+    const back = new Mesh(new BoxGeometry(0.42, 0.55, 0.02), this.fill("#8a5a2b", 0.2));
+    back.add(new LineSegments(new EdgesGeometry(back.geometry), this.ink()));
+    const sheet = new Mesh(new PlaneGeometry(0.38, 0.5), new MeshBasicMaterial({ map: this.regTex }));
+    sheet.position.z = 0.012;
+    sheet.rotation.z = Math.PI;
+    board.add(back, sheet);
+    board.position.set(0, 1.2, 0.42);
+    board.rotation.x = -2.2;
+    board.scale.setScalar(1.5); // drawn a little large so the camera can read it over the shoulder
+    const pen = new Mesh(new BoxGeometry(0.03, 0.18, 0.03), this.fill(HUE.blue, 0.1));
+    pen.position.set(0, -0.62, 0.06);
+    armR.add(pen);
+    body.add(legL, legR, torso, vest, stripes, head, hat, armL, armR, board);
     body.scale.setScalar(1.25);
     root.add(body);
-    return { root, legL, legR, armL, armR, tablet };
+    return { root, legL, legR, armL, armR, board };
   }
 
   private buildTruck() {
@@ -491,6 +562,62 @@ export class PortScene {
     this.world.add(this.truck);
   }
 
+  /** A soft contact shadow on the ground (a dark translucent patch), for weight. */
+  private shadow(w: number, d: number, x: number, z: number, round = false) {
+    const geo = round ? new CircleGeometry(w / 2, 20) : new PlaneGeometry(w, d);
+    const m = new Mesh(geo, new MeshBasicMaterial({ color: new Color("#000000"), transparent: true, opacity: this.t.dark ? 0.28 : 0.13, depthWrite: false }));
+    m.rotation.x = -Math.PI / 2;
+    m.position.set(x, 0.012, z);
+    return m;
+  }
+
+  /** Pakistan's flag on a pole: dark green field with a white crescent and star, white band at the hoist. */
+  private flag(w: number, h: number, poleH: number) {
+    const g = new Group();
+    const pole = this.solid(new CylinderGeometry(0.05, 0.06, poleH, 8).translate(0, poleH / 2, 0), "#c9ced6", 0.2, 0.7);
+    const tex = this.tex(drawTexture(300, 200, (c) => {
+      c.fillStyle = "#ffffff"; c.fillRect(0, 0, 75, 200);
+      c.fillStyle = "#01411c"; c.fillRect(75, 0, 225, 200);
+      c.fillStyle = "#ffffff"; c.beginPath(); c.arc(190, 100, 58, 0, Math.PI * 2); c.fill();
+      c.fillStyle = "#01411c"; c.beginPath(); c.arc(206, 86, 50, 0, Math.PI * 2); c.fill();
+      c.fillStyle = "#ffffff"; c.beginPath();
+      for (let k = 0; k < 10; k++) { const r = k % 2 ? 9 : 22, a = -0.6 + (k * Math.PI) / 5; c.lineTo(222 + Math.cos(a) * r, 74 + Math.sin(a) * r); }
+      c.closePath(); c.fill();
+      c.strokeStyle = "#1b1b1b"; c.lineWidth = 3; c.strokeRect(1.5, 1.5, 297, 197);
+    }));
+    const cloth = new Group();
+    const m = new Mesh(new PlaneGeometry(w, h), new MeshBasicMaterial({ map: tex, side: DoubleSide }));
+    m.position.x = w / 2;
+    cloth.add(m);
+    cloth.position.y = poleH - h / 2 - 0.1;
+    g.add(pole, cloth);
+    this.flags.push(cloth);
+    return g;
+  }
+
+  /** The clipboard sheet: five checks, ticked one by one as the agent works through them. */
+  private paintRegister(ticks: number) {
+    const c = this.regCanvas?.getContext("2d");
+    if (!c || !this.regTex) return;
+    const T = this.t;
+    c.fillStyle = "#fffdf7"; c.fillRect(0, 0, 360, 470);
+    c.fillStyle = "#3b3f46"; c.fillRect(130, 0, 100, 22);
+    c.fillStyle = "#1b2433"; c.font = `800 25px ${FONT}`; c.textBaseline = "middle"; c.fillText("INSPECTION REGISTER", 22, 52);
+    c.font = `500 17px ${MONO}`; c.fillStyle = "#5b6474"; c.fillText(`Rules as of ${EXAMPLE.asOf}`, 22, 80);
+    const rows = ["Goods: Li-ion power bank", "Questions answered", "Tariff notes checked", `Code: ${EXAMPLE.code}`, "Value: PKR 500,000"];
+    rows.forEach((r, k) => {
+      const y = 130 + k * 64;
+      c.strokeStyle = "#1b2433"; c.lineWidth = 3; c.strokeRect(22, y - 16, 32, 32);
+      c.fillStyle = "#1b2433"; c.font = `600 21px ${FONT}`; c.fillText(r, 70, y);
+      c.strokeStyle = "#d7d2c4"; c.lineWidth = 2; c.beginPath(); c.moveTo(70, y + 26); c.lineTo(338, y + 26); c.stroke();
+      if (k < ticks) {
+        c.strokeStyle = T.ok; c.lineWidth = 6; c.lineCap = "round";
+        c.beginPath(); c.moveTo(26, y); c.lineTo(36, y + 12); c.lineTo(58, y - 22); c.stroke();
+      }
+    });
+    this.regTex.needsUpdate = true;
+  }
+
   private paintLabel(c: CanvasRenderingContext2D, kicker: string, big: string, small: string, cleared: boolean) {
     const T = this.t;
     c.fillStyle = T.dark ? "#13233f" : "#ffffff"; c.fillRect(0, 0, 640, 250);
@@ -509,13 +636,16 @@ export class PortScene {
   // ------------------------------------------------------------------------------------------------ per frame
   setProgress(p: number) { this.target = clamp01(p); }
 
+  /** Jump straight to the scroll position without easing (used by the development preview to inspect single frames). */
+  snap() { this.cur = this.target; this.render(); }
+
   setSize(w: number, h: number) {
     this.w = Math.max(1, w); this.h = Math.max(1, h);
     this.renderer.setSize(this.w, this.h, false);
     this.camera.aspect = this.w / this.h;
     this.camera.fov = this.camera.aspect < 0.8 ? 54 : 36;
     // Wide screens: the chapter card sits on the left, so the drawing shifts right. Phones: the card covers the bottom, so the drawing lifts.
-    if (this.camera.aspect > 1.15) this.camera.setViewOffset(this.w, this.h, -this.w * 0.16, 0, this.w, this.h);
+    if (this.camera.aspect > 1.15) this.camera.setViewOffset(this.w, this.h, -this.w * 0.1, 0, this.w, this.h);
     else if (this.camera.aspect < 0.9) this.camera.setViewOffset(this.w, this.h, 0, this.h * 0.2, this.w, this.h);
     else this.camera.clearViewOffset();
     this.camera.updateProjectionMatrix();
@@ -548,7 +678,7 @@ export class PortScene {
     const now = performance.now();
     const dt = Math.min(0.05, (now - this.last) / 1000);
     this.last = now;
-    this.cur += (this.target - this.cur) * (1 - Math.exp(-dt * 5)); // gentle inertia
+    this.cur += (this.target - this.cur) * (1 - Math.exp(-dt * 3)); // slow, gentle inertia
     this.render();
   }
 
@@ -558,32 +688,36 @@ export class PortScene {
     const time = (performance.now() - this.t0) / 1000;
 
     // 1. the ship docks
-    const shipX = lerp(-34, 0, ramp(p, 0, 0.09));
+    const shipX = lerp(-34, 0, ramp(p, 0, 0.08));
     this.ship.position.x = shipX;
     this.ship.position.y = Math.sin(time * 0.8) * 0.05;
     this.waves.position.x = (time * 0.35) % 2.4;
 
     // 2. the crane lifts the container onto the quay; later onto the truck
-    const truckX = track(p, [[0.775, -48], [0.835, 6], [0.875, 6], [1, 82]]);
-    const heroY = track(p, [[0.11, 5.1], [0.13, 8.4], [0.155, 8.4], [0.175, 0], [0.765, 0], [0.79, 4.4], [0.835, 4.4], [0.86, 1.2]]);
-    const heroZ = track(p, [[0.13, -10], [0.155, ROAD_Z]]);
-    const onTruck = p >= 0.86;
+    const truckX = track(p, [[0.785, -48], [0.84, 6], [0.88, 6], [1, 82]]);
+    const heroY = track(p, [[0.09, 5.1], [0.11, 8.4], [0.13, 8.4], [0.155, 0], [0.775, 0], [0.8, 4.4], [0.84, 4.4], [0.865, 1.2]]);
+    const heroZ = track(p, [[0.11, -10], [0.13, ROAD_Z]]);
+    const onTruck = p >= 0.865;
     this.hero.position.set(onTruck ? truckX : 6 + shipX, heroY + (p < 0.11 ? this.ship.position.y : 0), heroZ);
-    const trolleyZ = track(p, [[0.13, -10], [0.155, ROAD_Z]]);
+    const trolleyZ = track(p, [[0.11, -10], [0.13, ROAD_Z]]);
     this.trolley.position.z = trolleyZ;
-    const sp = track(p, [[0.08, 10.6], [0.11, 7.7], [0.13, 11.0], [0.155, 11.0], [0.175, 2.6], [0.2, 10.6], [0.74, 10.6], [0.765, 2.6], [0.79, 7.0], [0.835, 7.0], [0.86, 3.8], [0.89, 10.6]]);
+    const sp = track(p, [[0.06, 10.6], [0.09, 7.7], [0.11, 11.0], [0.13, 11.0], [0.155, 2.6], [0.18, 10.6], [0.75, 10.6], [0.775, 2.6], [0.8, 7.0], [0.84, 7.0], [0.865, 3.8], [0.89, 10.6]]);
     this.spreader.position.set(CRANE_X, sp, trolleyZ);
     this.cables.position.set(CRANE_X, TROLLEY_Y, trolleyZ);
     this.cables.scale.y = Math.max(0.01, TROLLEY_Y - (sp + 0.3));
 
     // container label: goods declared -> tariff line -> cleared
     const lm = this.heroLabel.material as MeshBasicMaterial;
-    const want = this.labels[p < 0.3 ? 0 : p < 0.785 ? 1 : 2]!;
+    const want = this.labels[p < 0.36 ? 0 : p < 0.79 ? 1 : 2]!;
+    const lifted = clamp01(heroY / 5);
+    this.heroShadow.visible = !onTruck;
+    this.heroShadow.position.set(this.hero.position.x, 0.012, heroZ);
+    (this.heroShadow.material as MeshBasicMaterial).opacity = (T.dark ? 0.28 : 0.13) * (1 - lifted) * (p > 0.12 ? 1 : 0);
     if (lm.map !== want) { lm.map = want; lm.needsUpdate = true; }
 
     // 3. the clearing agent walks from the gate booth to the container, checks it, and later turns to watch the truck leave
     const a = this.agent;
-    const u = ramp(p, 0.17, 0.27);
+    const u = ramp(p, 0.16, 0.24);
     const segs = AGENT_PATH.slice(1).map((pt, i) => Math.hypot(pt[0] - AGENT_PATH[i]![0], pt[1] - AGENT_PATH[i]![1]));
     const total = segs.reduce((s, x) => s + x, 0);
     let d = u * total, si = 0;
@@ -593,26 +727,34 @@ export class PortScene {
     a.root.position.set(lerp(A[0], B[0], f), 0, lerp(A[1], B[1], f));
     const walking = Math.min(1, u * 10, (1 - u) * 10);
     const heading = Math.atan2(B[0] - A[0], B[1] - A[1]);
-    const atWork = Math.atan2(6 - 8.7, ROAD_Z + 1.5); // face the middle of the container
-    let facing = lerp(heading, atWork, ramp(p, 0.265, 0.285));
-    facing = lerp(facing, -1.5 * Math.PI, ramp(p, 0.86, 0.9)); // turn the short way round to watch the truck
+    const atWork = Math.atan2(6 - 7.6, ROAD_Z + 1.45); // face the middle of the container
+    let facing = lerp(heading, atWork, ramp(p, 0.235, 0.25));
+    facing = lerp(facing, -1.5 * Math.PI, ramp(p, 0.87, 0.9)); // turn the short way round to watch the truck
     a.root.rotation.y = facing;
-    a.root.visible = p > 0.14;
+    a.root.visible = p > 0.13;
+    this.agentShadow.visible = a.root.visible;
+    this.agentShadow.position.set(a.root.position.x, 0.012, a.root.position.z);
+    // tick the register one line at a time while the camera looks over the agent's shoulder
+    const ticks = Math.floor(clamp01((p - 0.27) / 0.055) * 5.999);
+    if (ticks !== this.regCount) { this.regCount = ticks; this.paintRegister(ticks); }
     const phase = u * total * 2.6;
     a.legL.rotation.x = Math.sin(phase) * 0.55 * walking;
     a.legR.rotation.x = -Math.sin(phase) * 0.55 * walking;
-    a.armL.rotation.x = -Math.sin(phase) * 0.45 * walking - ramp(p, 0.9, 0.93) * 2.6 + Math.sin(time * 6) * 0.2 * ramp(p, 0.91, 0.94);
-    a.armR.rotation.x = Math.sin(phase) * 0.45 * walking - track(p, [[0.26, 0], [0.29, 1.15], [0.74, 1.15], [0.78, 0]]);
+    a.armL.rotation.x = -Math.sin(phase) * 0.45 * walking - track(p, [[0.24, 0], [0.26, 0.9], [0.75, 0.9], [0.78, 0], [0.9, 0], [0.93, 2.6]]) + Math.sin(time * 6) * 0.2 * ramp(p, 0.91, 0.94);
+    const writing = bump(p, 0.26, 0.27, 0.325, 0.335);
+    a.armR.rotation.x = Math.sin(phase) * 0.45 * walking - track(p, [[0.25, 0], [0.27, 0.85], [0.33, 0.85], [0.35, 1.15], [0.38, 1.15], [0.4, 0]]) + Math.sin(time * 9) * 0.07 * writing;
+    a.armR.rotation.z = 0.25 * writing;
+    a.board.visible = p > 0.235 && p < 0.785;
     a.root.position.y = Math.abs(Math.sin(phase)) * 0.05 * walking;
 
-    // scan sweep with rays from the tablet
-    const scanA = bump(p, 0.27, 0.285, 0.315, 0.335);
-    const sx = lerp(6 - C.L / 2, 6 + C.L / 2, ramp(p, 0.275, 0.325));
+    // scan sweep with rays from the register
+    const scanA = bump(p, 0.335, 0.345, 0.37, 0.385);
+    const sx = lerp(6 - C.L / 2, 6 + C.L / 2, ramp(p, 0.34, 0.38));
     this.scan.position.set(sx, C.H / 2, ROAD_Z);
     (this.scan.material as MeshBasicMaterial).opacity = 0.32 * scanA;
     this.scan.visible = scanA > 0.01;
     const tp = new Vector3();
-    a.tablet.getWorldPosition(tp);
+    a.board.getWorldPosition(tp);
     const rp = this.rays.geometry.getAttribute("position") as Float32BufferAttribute;
     const corners = [[0.25, -C.W / 2 - 0.25], [0.25, C.W / 2 + 0.25], [C.H + 0.25, -C.W / 2 - 0.25], [C.H + 0.25, C.W / 2 + 0.25]] as const;
     corners.forEach(([y, z], k) => { rp.setXYZ(k * 2, tp.x, tp.y, tp.z); rp.setXYZ(k * 2 + 1, sx, y, ROAD_Z + z); });
@@ -621,17 +763,17 @@ export class PortScene {
     (this.rays.material as LineBasicMaterial).opacity = 0.7 * scanA;
 
     // 4. duty layers stack above the container, then fold back into it
-    const fold = ramp(p, 0.76, 0.79);
+    const fold = ramp(p, 0.77, 0.79);
     this.slabs.forEach((g, k) => {
-      const e = ramp(p, 0.34 + k * 0.022, 0.38 + k * 0.022) * (1 - fold);
+      const e = ramp(p, 0.41 + k * 0.018, 0.45 + k * 0.018) * (1 - fold);
       g.visible = e > 0.01 && !onTruck;
       g.position.set(6, lerp(C.H, C.H + 0.3 + k * 0.48, e), ROAD_Z);
       g.scale.set(lerp(0.6, 1, e), Math.max(0.001, e), lerp(0.6, 1, e));
     });
 
-    // 5. source sheets fan out from the tablet
+    // 5. source sheets fan out from the register
     this.sheets.forEach((m, k) => {
-      const o = ramp(p, 0.5 + k * 0.015, 0.56 + k * 0.015) * (1 - ramp(p, 0.64, 0.68));
+      const o = ramp(p, 0.55 + k * 0.012, 0.6 + k * 0.012) * (1 - ramp(p, 0.655, 0.685));
       m.visible = o > 0.01;
       m.position.set(lerp(tp.x, 6 + (k - 2.5) * 1.55, o), lerp(tp.y, 6.6 + Math.sin(k * 1.3) * 0.35 + Math.sin(time * 1.1 + k) * 0.05, o), lerp(tp.z, -1.4, o));
       m.rotation.set(0, 0, (k - 2.5) * -0.06);
@@ -640,7 +782,7 @@ export class PortScene {
     });
 
     // 6. not sure: candidate codes float up
-    const doubt = bump(p, 0.65, 0.68, 0.73, 0.76);
+    const doubt = bump(p, 0.675, 0.7, 0.745, 0.77);
     this.tags.forEach((m, k) => {
       m.visible = doubt > 0.01;
       m.position.set(2.2 + k * 2.7, 7.5 + Math.sin(time * 1.3 + k) * 0.08 + (1 - doubt) * 0.8, -2);
@@ -652,9 +794,12 @@ export class PortScene {
     this.truck.position.x = truckX;
     const roll = truckX / 0.5;
     this.wheels.forEach((w) => { w.rotation.z = -roll; });
-    this.barrier.rotation.x = track(p, [[0.86, 0], [0.885, 1.35]]);
-    const lamp = new Color(T.ink2).lerp(new Color(T.warn), bump(p, 0.64, 0.67, 0.74, 0.77)).lerp(new Color(T.ok), ramp(p, 0.78, 0.8));
+    this.barrier.rotation.x = track(p, [[0.865, 0], [0.885, 1.35]]);
+    const lamp = new Color(T.ink2).lerp(new Color(T.warn), bump(p, 0.67, 0.69, 0.75, 0.77)).lerp(new Color(T.ok), ramp(p, 0.79, 0.81));
     this.light.color.copy(lamp);
+
+    // flags ripple
+    this.flags.forEach((f, k) => { f.rotation.y = Math.sin(time * 1.6 + k) * 0.18; f.scale.x = 0.94 + Math.sin(time * 2.3 + k) * 0.06; });
 
     // gulls circle slowly
     this.gulls.forEach((g, k) => {
@@ -693,7 +838,8 @@ export class PortScene {
     this.world.clear();
     this.ship = new Group(); this.hero = new Group(); this.trolley = new Group(); this.spreader = new Group();
     this.truck = new Group(); this.barrier = new Group(); this.waves = new Group();
-    this.slabs = []; this.sheets = []; this.tags = []; this.wheels = []; this.gulls = []; this.labels = [];
+    this.slabs = []; this.sheets = []; this.tags = []; this.wheels = []; this.gulls = []; this.labels = []; this.flags = [];
+    this.regCanvas = null; this.regTex = null; this.regCount = -1;
   }
 
   dispose() {
