@@ -147,7 +147,7 @@ def main(argv=None):
     ap.add_argument("--skip-done-in", nargs="*", default=[], help="folders whose finished cases are skipped")
     ap.add_argument("--merge-from", nargs="*", default=[], help="copy the results of these shard folders into --out (or the default folder) and exit")
     ap.add_argument("--report", action="store_true", help="only rebuild the report")
-    ap.add_argument("--llm", choices=("gemini", "deepseek"), default="gemini", help="which provider answers; results are kept in a folder per provider")
+    ap.add_argument("--llm", choices=("gemini", "deepseek", "fireworks"), default="gemini", help="which provider answers; results are kept in a folder per provider")
     ap.add_argument("--classify-model", help="DeepSeek model for the Classify step only (for example deepseek-v4-pro)")
     ap.add_argument("--classify-thinking", choices=("enabled", "disabled"), help="DeepSeek thinking mode for the Classify step only")
     ap.add_argument("--tag", default="", help="results folder suffix, for example hints -> data/processed/eval/deepseek_hints")
@@ -159,10 +159,10 @@ def main(argv=None):
         print("merged", len(a.merge_from), "folders into", a.out)
         a.report = True
     if not a.report:
-        from src.agent import DeepSeekLLM, GeminiLLM
+        from src.agent import DeepSeekLLM, FireworksLLM, GeminiLLM
 
         ov = {k: v for k, v in (("model", a.classify_model), ("thinking", a.classify_thinking)) if v}
-        llm = DeepSeekLLM(max_calls=a.max_llm_calls, overrides={"classify": ov} if ov else None) if a.llm == "deepseek" else GeminiLLM(max_calls=a.max_llm_calls)
+        llm = {"deepseek": DeepSeekLLM, "fireworks": FireworksLLM}[a.llm](max_calls=a.max_llm_calls, overrides={"classify": ov} if ov else None) if a.llm in ("deepseek", "fireworks") else GeminiLLM(max_calls=a.max_llm_calls)
         cases = select(load_cases(tuple(k for k in a.kinds if k != "duty")) + (load_duty_cases() if "duty" in a.kinds else []) + (load_importer_cases() if "importer" in a.kinds else []), a.sample, a.seed, a.ids)
         if a.shard:
             i, n = (int(x) for x in a.shard.split("/"))

@@ -509,6 +509,15 @@ class DeepSeekLLM:
     """
 
     name = "deepseek"
+    URL, KEY_ENV, MODEL_ENV, DEFAULT_MODEL, LABEL = DEEPSEEK_URL, "DEEPSEEK_API_KEY", "DEEPSEEK_MODEL", "deepseek-flash", "DeepSeek"
+    DEFAULT_CACHE_DIR = DEEPSEEK_CACHE_DIR
+
+    def _body(self, model: str, thinking: str, system: str, prompt: str, temperature: float) -> dict:
+        body = {"model": model, "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+                "response_format": {"type": "json_object"}, "thinking": {"type": thinking}, "stream": False}
+        if thinking == "disabled":
+            body["temperature"] = temperature
+        return body
 
     def __init__(self, api_key: str | None = None, model: str | None = None, *, thinking: str | None = None, cache: bool = True,
                  cache_dir: Path | str | None = None, post: Callable | None = None, sleep: Callable[[float], None] = time.sleep,
@@ -516,11 +525,11 @@ class DeepSeekLLM:
                  overrides: dict | None = None):
         self._api_key = api_key
         self.overrides = dict(overrides or {})     # task -> {'model': ..., 'thinking': 'enabled'|'disabled'}, for example the Classify step only
-        self.model = model or os.environ.get("DEEPSEEK_MODEL", "").strip() or "deepseek-flash"
+        self.model = model or os.environ.get(self.MODEL_ENV, "").strip() or self.DEFAULT_MODEL
         self.thinking = (thinking or os.environ.get("DEEPSEEK_THINKING", "").strip() or "disabled").lower()
         if self.thinking not in ("enabled", "disabled"):
             raise ValueError("thinking must be 'enabled' or 'disabled'")
-        self.cache = ResponseCache(cache_dir or DEEPSEEK_CACHE_DIR, enabled=cache)
+        self.cache = ResponseCache(cache_dir or self.DEFAULT_CACHE_DIR, enabled=cache)
         self._post, self._sleep = post, sleep
         self.max_calls, self.max_failures, self.timeout, self.retries = max_calls, max_failures, timeout, retries
         self.stats = {"live_calls": 0, "failed_requests": 0, "cache_hits": 0, "tokens_in": 0, "tokens_out": 0, "tokens_in_cached": 0, "log": []}
@@ -534,9 +543,9 @@ class DeepSeekLLM:
             load_dotenv(ROOT / ".env")
         except Exception:
             pass
-        k = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+        k = os.environ.get(self.KEY_ENV, "").strip()
         if not k:
-            raise LLMUnavailable("DEEPSEEK_API_KEY is not set. Put it in .env (gitignored; never commit a key).")
+            raise LLMUnavailable(f"{self.KEY_ENV} is not set. Put it in .env (gitignored; never commit a key).")
         self._api_key = k
         return k
 
@@ -548,10 +557,7 @@ class DeepSeekLLM:
         if hit is not None:
             self.stats["cache_hits"] += 1
             return LLMResult(data=hit["response"], model=hit.get("model", "?"), cached=True, text=hit.get("text", ""), usage=hit.get("usage", {}))
-        body = {"model": model, "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
-                "response_format": {"type": "json_object"}, "thinking": {"type": thinking}, "stream": False}
-        if thinking == "disabled":
-            body["temperature"] = temperature
+        body = self._body(model, thinking, system, prompt, temperature)
         headers = {"Authorization": f"Bearer {self._key()}", "content-type": "application/json"}
         post = self._post
         if post is None:
@@ -565,7 +571,7 @@ class DeepSeekLLM:
             if self.stats["failed_requests"] >= self.max_failures:
                 raise LLMUnavailable(f"too many failed LLM requests ({self.max_failures}); stopping")
             try:
-                resp = post(DEEPSEEK_URL, headers=headers, json=body, timeout=self.timeout)
+                resp = post(self.URL, headers=headers, json=body, timeout=self.timeout)
             except Exception as e:
                 self.stats["failed_requests"] += 1
                 last = f"network error: {type(e).__name__}"
@@ -593,18 +599,40 @@ class DeepSeekLLM:
                 return LLMResult(data=parsed, model=model, cached=False, text=text, usage=usage)
             self.stats["failed_requests"] += 1
             if st in (401, 403):
-                raise LLMUnavailable(f"DeepSeek rejected the API key ({st}). Check DEEPSEEK_API_KEY in .env.")
+                raise LLMUnavailable(f"{self.LABEL} rejected the API key ({st}). Check {self.KEY_ENV} in .env.")
             if st == 402:
-                raise LLMRateLimited("DeepSeek balance is empty (HTTP 402). Top up the account, then run again; nothing more was sent.")
+                raise LLMRateLimited(f"{self.LABEL} balance is empty (HTTP 402). Top up the account, then run again; nothing more was sent.")
             if st in (429, 500, 502, 503, 504):
                 last = f"http {st}"
                 self._sleep(3.0 * attempt)
                 continue
-            raise LLMUnavailable(f"DeepSeek http {st}: {resp.text[:200]}")
-        raise LLMBadResponse(f"DeepSeek did not give a usable answer after {self.retries} attempts ({last})")
+            raise LLMUnavailable(f"{self.LABEL} http {st}: {resp.text[:200]}")
+        raise LLMBadResponse(f"{self.LABEL} did not give a usable answer after {self.retries} attempts ({last})")
 
 
-PROVIDERS: dict[str, Callable[..., LLM]] = {"gemini": GeminiLLM, "deepseek": DeepSeekLLM, "fake": FakeLLM}
+# --------------------------------------------------------------------------------------------- Fireworks
+FIREWORKS_URL = "https://api.fireworks.ai/inference/v1/chat/completions"
+FIREWORKS_CACHE_DIR = ROOT / "data" / "processed" / "cache" / "llm_fireworks"
+
+
+class FireworksLLM(DeepSeekLLM):
+    """Fireworks AI (open models such as Kimi) through its OpenAI-compatible chat API. Key: FIREWORKS_API_KEY in .env.
+    Model: FIREWORKS_MODEL (full id, for example 'accounts/fireworks/models/<name>'; no default, the owner names it). There is no `thinking` switch in the request
+    (a reasoning model thinks by itself); the field is kept only so the cache key and the eval options work the same as for DeepSeek."""
+
+    name = "fireworks"
+    URL, KEY_ENV, MODEL_ENV, LABEL = FIREWORKS_URL, "FIREWORKS_API_KEY", "FIREWORKS_MODEL", "Fireworks"
+    DEFAULT_MODEL = ""
+    DEFAULT_CACHE_DIR = FIREWORKS_CACHE_DIR
+
+    def _body(self, model: str, thinking: str, system: str, prompt: str, temperature: float) -> dict:
+        if not model:
+            raise LLMUnavailable("No Fireworks model chosen: set FIREWORKS_MODEL in .env or pass model=...")
+        return {"model": model, "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+                "response_format": {"type": "json_object"}, "temperature": temperature, "max_tokens": 12000, "stream": False}
+
+
+PROVIDERS: dict[str, Callable[..., LLM]] = {"gemini": GeminiLLM, "deepseek": DeepSeekLLM, "fireworks": FireworksLLM, "fake": FakeLLM}
 
 
 def make_llm(provider: str = "gemini", **kwargs) -> LLM:
