@@ -92,6 +92,37 @@ class AgentService:
             self.created[turn.thread_id] = self.clock()
         return payload(turn)
 
+    def ask_stream(self, question: str, as_of_date: str | None):
+        """Generator of events: {'type': 'step', 'text'} while the agent works, then {'type': 'done', 'reply': <same payload as ask()>}."""
+        self.purge()
+        with self.guard:
+            if len(self.created) >= self.max_threads:
+                raise Busy("The service is busy. Please try again in a few minutes.")
+        for ev in self.agent.stream_ask(question, as_of_date=as_of_date):
+            if ev["type"] == "turn":
+                with self.guard:
+                    self.created[ev["turn"].thread_id] = self.clock()
+                yield {"type": "done", "reply": payload(ev["turn"])}
+            else:
+                yield {"type": "step", "node": ev["node"], "text": ev["text"]}
+
+    def answer_stream(self, thread_id: str, answers: dict, reply: str | None):
+        self.purge()
+        with self.guard:
+            if thread_id not in self.created:
+                raise KeyError(thread_id)
+            lock = self.locks.setdefault(thread_id, threading.Lock())
+        if not lock.acquire(blocking=False):
+            raise Busy("This conversation is still working on your last answer.")
+        try:
+            if self.agent.pending(thread_id) is None:
+                raise KeyError(thread_id)
+            resume = {"answers": answers} if answers else (reply or "")
+            for ev in self.agent.stream_resume(thread_id, resume):
+                yield ({"type": "done", "reply": payload(ev["turn"])} if ev["type"] == "turn" else {"type": "step", "node": ev["node"], "text": ev["text"]})
+        finally:
+            lock.release()
+
     def answer(self, thread_id: str, answers: dict, reply: str | None) -> dict:
         self.purge()
         with self.guard:

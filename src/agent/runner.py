@@ -70,6 +70,29 @@ class CustomsAgent:
         out = self.graph.invoke({"question": question, "date_arg": as_of_date}, self._cfg(tid))
         return self._result(tid, out)
 
+    def _stream(self, inp: Any, thread_id: str):
+        """Run the graph and yield {'type': 'step', 'node', 'text'} for every trace line as its node finishes, then {'type': 'turn', 'turn': TurnResult}."""
+        for upd in self.graph.stream(inp, self._cfg(thread_id), stream_mode="updates"):
+            for node, delta in (upd or {}).items():
+                if node.startswith("__") or not isinstance(delta, dict):          # '__interrupt__' marks a pause; the result is read from the state below
+                    continue
+                for line in delta.get("trace") or []:
+                    yield {"type": "step", "node": node, "text": str(line)}
+        yield {"type": "turn", "turn": self._result(thread_id, {})}
+
+    def stream_ask(self, question: str, as_of_date: str | None = None, thread_id: str | None = None):
+        """Like ask(), but yields the agent's steps while it works (for a live 'thinking' display)."""
+        tid = thread_id or uuid.uuid4().hex
+        if self.graph.get_state(self._cfg(tid)).values:
+            raise ValueError(f"thread '{tid}' already exists; use resume() to continue it or pick a new thread id")
+        yield from self._stream({"question": question, "date_arg": as_of_date}, tid)
+
+    def stream_resume(self, thread_id: str, answer: Any):
+        """Like resume(), but yields the steps while it works."""
+        if self.pending(thread_id) is None:
+            raise ValueError(f"thread '{thread_id}' has no pending questions")
+        yield from self._stream(Command(resume=answer), thread_id)
+
     def resume(self, thread_id: str, answer: Any) -> TurnResult:
         """Answer the pending questions. `answer`: a string, {'answers': {question id: text}} or {question id: text}."""
         if self.pending(thread_id) is None:
