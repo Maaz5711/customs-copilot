@@ -23,7 +23,7 @@ class Busy(Exception):
 
 
 def build_default_agent(checkpointer):
-    from src.agent import CustomsAgent, DeepSeekLLM, FireworksLLM, GeminiLLM
+    from src.agent import CustomsAgent, DeepSeekLLM, FireworksLLM, GeminiLLM, OpenRouterLLM
 
     provider = os.environ.get("LLM_PROVIDER", "deepseek").lower()
     budget = int(os.environ.get("API_MAX_LLM_CALLS", "3000"))
@@ -31,6 +31,8 @@ def build_default_agent(checkpointer):
         llm = DeepSeekLLM(max_calls=budget, cache=False, overrides={"classify": {"thinking": "enabled"}})
     elif provider == "fireworks":
         llm = FireworksLLM(max_calls=budget, cache=False)
+    elif provider == "openrouter":
+        llm = OpenRouterLLM(max_calls=budget, cache=False)
     elif provider == "gemini":
         llm = GeminiLLM(max_calls=budget, cache=False)
     else:

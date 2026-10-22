@@ -221,3 +221,12 @@ html.lenis, html.lenis body { height: auto; }
   .story[data-mode="pinned"] .story-row > * { padding-top: .22rem; padding-bottom: .22rem; }
   .story[data-mode="pinned"] .story-card table { font-size: 14px; }
 }
+
+
+/* research trail: a vertical timeline of what the agent did (no inline styles: the entrance motion comes from useReveal) */
+.trail { position: relative; display: grid; gap: .9rem; padding-left: .25rem; }
+.trail::before { content: ""; position: absolute; left: 1.05rem; top: .6rem; bottom: .6rem; width: 2px; background: linear-gradient(var(--line), var(--line)); border-radius: 2px; }
+.trail-item { position: relative; display: grid; grid-template-columns: 1.9rem 1fr; gap: .75rem; align-items: start; }
+.trail-dot { position: relative; z-index: 1; display: inline-flex; width: 1.9rem; height: 1.9rem; align-items: center; justify-content: center; border-radius: 9999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); }
+.trail-ok { border-color: var(--ok); background: var(--ok); color: var(--bg); }
+.trail-warn { border-color: var(--warn); background: var(--warn-soft); color: var(--warn); }

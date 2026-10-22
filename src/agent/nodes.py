@@ -20,6 +20,7 @@ from langgraph.types import interrupt
 from src.tools.compute import total_buckets
 
 from . import prompts
+from .explore import explore
 from .facts import apply_value, coerce, spec_for, tool_args
 from .ground import Corpus, check_text, clean_llm_text
 from .llm import LLM, LLMBadResponse, LLMError
@@ -96,6 +97,9 @@ class Config:
     k_tariff: int = 10
     # one small LLM call proposes 4-digit headings; they only widen the candidate pool. AGENT_USE_HINTS=0 switches it off (the unit tests do).
     use_hints: bool = field(default_factory=lambda: os.environ.get("AGENT_USE_HINTS", "1") != "0")
+    # autonomous research after the first retrieval: up to this many model-chosen actions (search, browse a heading, read notes, rulings) widen the pool.
+    # AGENT_EXPLORE_STEPS=0 switches it off (the unit tests do; tests/test_agent_explore.py turns it on).
+    explore_steps: int = field(default_factory=lambda: int(os.environ.get("AGENT_EXPLORE_STEPS", "4")))
     floors: dict = field(default_factory=lambda: dict(DEFAULT_FLOORS))
     # ask about customs-duty concessions (Fifth Schedule claims, China FTA origin / Form E) once a bill is computed. AGENT_ASK_CONCESSIONS=0 switches it off (older unit tests do)
     ask_concessions: bool = field(default_factory=lambda: os.environ.get("AGENT_ASK_CONCESSIONS", "1") != "0")
@@ -500,9 +504,16 @@ def make_search(deps: Deps):
             return _err_update(RuntimeError(f"The search index is missing ({e}). Build it with: python -m src.search.build"))
         except Exception as e:      # an index or model problem must end in a clear message, not a stack trace
             return _err_update(RuntimeError(f"Search failed: {type(e).__name__}: {e}"))
-        return {"evidence": ev, "offered_codes": offered_codes(ev), "user_codes": good, "user_code_only": code_only, "notes_to_user": notes, "retry_pending": False, "route": "classify", "hint_headings": hints, "hint_query": query_text, "llm_log": hint_log,
+        explore_log, explore_trace = [], []
+        if cfg.explore_steps > 0 and query_text and not code_only:
+            try:
+                ev, explore_log, explore_trace = explore(deps.llm, deps.retriever, ev, goods=query_text, as_of_date=date_iso, steps=cfg.explore_steps,
+                                                         floors=cfg.floors, feedback=state.get("feedback") if retry else None)
+            except LLMError as e:
+                return _err_update(e)
+        return {"evidence": ev, "offered_codes": offered_codes(ev), "user_codes": good, "user_code_only": code_only, "notes_to_user": notes, "retry_pending": False, "route": "classify", "hint_headings": hints, "hint_query": query_text, "llm_log": hint_log + explore_log,
                 "trace": [f"search: {len(ev['lines'])} lines, {len(ev['notes'])} notes, {len(ev['sro'])} SRO excerpts, {len(ev['rulings'])} rulings"
-                          + (f" (retry {state.get('retries', 0)})" if retry else "") + (f", dropped below floor {ev['dropped']}" if any(ev["dropped"].values()) else "")]}
+                          + (f" (retry {state.get('retries', 0)})" if retry else "") + (f", dropped below floor {ev['dropped']}" if any(ev["dropped"].values()) else "")] + explore_trace}
 
     return search
 

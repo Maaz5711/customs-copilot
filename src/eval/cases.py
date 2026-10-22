@@ -25,6 +25,8 @@ class Case:
     source_file: str = ""          # real cases: basename of the ruling PDF the case came from (leak control)
     ruling_kind: str = ""
     candidate_headings: list[str] = field(default_factory=list)
+    split: str = ""                 # catalogue cases only: 'dev' (tune on it) or 'test' (report on it, never tune)
+    confidence: str = ""            # catalogue cases only: writer's confidence in the label, 'H' or 'M'
 
     @property
     def level(self) -> int:
@@ -45,6 +47,10 @@ def load_cases(kinds=("real", "synthetic"), gt_dir: Path = GT) -> list[Case]:
         for r in csv.DictReader(open(gt_dir / "cases_real.csv", encoding="utf-8")):
             out.append(Case(id=r["id"], kind="real", description=r["description"], as_of_date=r["as_of_date"], behavior="answer",
                             expected=digits(r["expected_code"]), source_file=_basename(r["source_url"]), ruling_kind=r["ruling_kind"]))
+    if "catalog" in kinds and (gt_dir / "cases_catalog.csv").exists():
+        for r in csv.DictReader(open(gt_dir / "cases_catalog.csv", encoding="utf-8")):
+            out.append(Case(id=r["id"], kind="catalog", description=r["description"], as_of_date=r["as_of_date"], behavior="answer",
+                            expected=digits(r["expected_code"]), split=r["split"], confidence=r["label_confidence"]))
     if "synthetic" in kinds:
         for r in csv.DictReader(open(gt_dir / "cases_synthetic.csv", encoding="utf-8")):
             alts = [digits(x) for x in re.split(r"[;|,\s]+", r["alt_acceptable_codes"] or "") if digits(x)]

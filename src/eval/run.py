@@ -134,11 +134,20 @@ def run(systems, cases, llm, out: Path = OUT, rerun_errors: bool = False, log=pr
     return dict(done=done, skipped=skipped, stopped=None)
 
 
+def is_deepseek_peak(now=None) -> bool:
+    """DeepSeek's full-price window: Monday to Friday, 01:00-04:00 and 06:00-10:00 UTC."""
+    import datetime as _dt
+
+    now = now or _dt.datetime.now(_dt.timezone.utc)
+    return now.weekday() < 5 and (1 <= now.hour < 4 or 6 <= now.hour < 10)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--systems", nargs="+", default=list(SYSTEMS), choices=SYSTEMS)
-    ap.add_argument("--kinds", nargs="+", default=["real", "synthetic"], choices=["real", "synthetic", "duty", "importer"])
+    ap.add_argument("--kinds", nargs="+", default=["real", "synthetic"], choices=["real", "synthetic", "duty", "importer", "catalog"])
     ap.add_argument("--ids", nargs="+")
+    ap.add_argument("--split", choices=("dev", "test"), help="catalogue cases only: keep one split")
     ap.add_argument("--sample", type=int, help="N cases per kind, fixed random subset")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--max-llm-calls", type=int, default=100, help="cap on LIVE calls in this process (cache hits are free)")
@@ -147,23 +156,28 @@ def main(argv=None):
     ap.add_argument("--skip-done-in", nargs="*", default=[], help="folders whose finished cases are skipped")
     ap.add_argument("--merge-from", nargs="*", default=[], help="copy the results of these shard folders into --out (or the default folder) and exit")
     ap.add_argument("--report", action="store_true", help="only rebuild the report")
-    ap.add_argument("--llm", choices=("gemini", "deepseek", "fireworks"), default="gemini", help="which provider answers; results are kept in a folder per provider")
+    ap.add_argument("--llm", choices=("gemini", "deepseek", "fireworks", "openrouter"), default="gemini", help="which provider answers; results are kept in a folder per provider")
     ap.add_argument("--classify-model", help="DeepSeek model for the Classify step only (for example deepseek-v4-pro)")
     ap.add_argument("--classify-thinking", choices=("enabled", "disabled"), help="DeepSeek thinking mode for the Classify step only")
+    ap.add_argument("--allow-peak", action="store_true", help="run DeepSeek even in its peak hours (full price); the owner wants off-peak only")
     ap.add_argument("--tag", default="", help="results folder suffix, for example hints -> data/processed/eval/deepseek_hints")
     ap.add_argument("--out", type=Path, default=None)
     a = ap.parse_args(argv)
+    if a.llm == "deepseek" and not a.report and not a.merge_from and not a.allow_peak and is_deepseek_peak():
+        raise SystemExit("DeepSeek peak hours (01:00-04:00 and 06:00-10:00 UTC, Monday to Friday): not started. Run off-peak, or pass --allow-peak.")
     a.out = a.out or OUT / (a.llm + ("_" + a.tag if a.tag else ""))
     if a.merge_from:
         merge_results(a.merge_from, a.out)
         print("merged", len(a.merge_from), "folders into", a.out)
         a.report = True
     if not a.report:
-        from src.agent import DeepSeekLLM, FireworksLLM, GeminiLLM
+        from src.agent import DeepSeekLLM, FireworksLLM, GeminiLLM, OpenRouterLLM
 
         ov = {k: v for k, v in (("model", a.classify_model), ("thinking", a.classify_thinking)) if v}
-        llm = {"deepseek": DeepSeekLLM, "fireworks": FireworksLLM}[a.llm](max_calls=a.max_llm_calls, overrides={"classify": ov} if ov else None) if a.llm in ("deepseek", "fireworks") else GeminiLLM(max_calls=a.max_llm_calls)
+        llm = {"deepseek": DeepSeekLLM, "fireworks": FireworksLLM, "openrouter": OpenRouterLLM}[a.llm](max_calls=a.max_llm_calls, overrides={"classify": ov} if ov else None) if a.llm in ("deepseek", "fireworks", "openrouter") else GeminiLLM(max_calls=a.max_llm_calls)
         cases = select(load_cases(tuple(k for k in a.kinds if k != "duty")) + (load_duty_cases() if "duty" in a.kinds else []) + (load_importer_cases() if "importer" in a.kinds else []), a.sample, a.seed, a.ids)
+        if a.split:
+            cases = [c for c in cases if c.kind != "catalog" or c.split == a.split]
         if a.shard:
             i, n = (int(x) for x in a.shard.split("/"))
             cases = cases[i::n]
