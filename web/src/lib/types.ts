@@ -75,6 +75,7 @@ export type FinalResult = {
   unverified?: Note[];
   verification?: { summary?: string; warnings?: Note[] } | null;
   disclaimer?: string;
+  trace?: string[];
 };
 
 export type AgentReply =

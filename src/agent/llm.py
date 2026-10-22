@@ -558,7 +558,7 @@ class DeepSeekLLM:
             self.stats["cache_hits"] += 1
             return LLMResult(data=hit["response"], model=hit.get("model", "?"), cached=True, text=hit.get("text", ""), usage=hit.get("usage", {}))
         body = self._body(model, thinking, system, prompt, temperature)
-        headers = {"Authorization": f"Bearer {self._key()}", "content-type": "application/json"}
+        headers = {"Authorization": f"Bearer {self._key()}", "content-type": "application/json", **self._extra_headers()}
         post = self._post
         if post is None:
             import requests
@@ -570,6 +570,7 @@ class DeepSeekLLM:
                 raise LLMBudgetExceeded(f"live LLM call budget reached ({self.max_calls} calls this run); nothing more was sent")
             if self.stats["failed_requests"] >= self.max_failures:
                 raise LLMUnavailable(f"too many failed LLM requests ({self.max_failures}); stopping")
+            self._pace()
             try:
                 resp = post(self.URL, headers=headers, json=body, timeout=self.timeout)
             except Exception as e:
@@ -582,7 +583,7 @@ class DeepSeekLLM:
                 self.stats["live_calls"] += 1
                 try:
                     j = resp.json()
-                    text = j["choices"][0]["message"]["content"] or ""
+                    text = self._content(j)
                     usage = j.get("usage") or {}
                     parsed = parse_json_text(text)
                 except (ValueError, KeyError, IndexError, TypeError):
@@ -602,12 +603,26 @@ class DeepSeekLLM:
                 raise LLMUnavailable(f"{self.LABEL} rejected the API key ({st}). Check {self.KEY_ENV} in .env.")
             if st == 402:
                 raise LLMRateLimited(f"{self.LABEL} balance is empty (HTTP 402). Top up the account, then run again; nothing more was sent.")
+            self._check_fatal(st, resp)
             if st in (429, 500, 502, 503, 504):
                 last = f"http {st}"
                 self._sleep(3.0 * attempt)
                 continue
             raise LLMUnavailable(f"{self.LABEL} http {st}: {resp.text[:200]}")
         raise LLMBadResponse(f"{self.LABEL} did not give a usable answer after {self.retries} attempts ({last})")
+
+    # hooks for OpenAI-compatible providers that differ in small ways (OpenRouter below)
+    def _extra_headers(self) -> dict:
+        return {}
+
+    def _pace(self) -> None:
+        return None
+
+    def _content(self, j: dict) -> str:
+        return j["choices"][0]["message"]["content"] or ""
+
+    def _check_fatal(self, status: int, resp) -> None:
+        return None
 
 
 # --------------------------------------------------------------------------------------------- Fireworks
@@ -632,7 +647,75 @@ class FireworksLLM(DeepSeekLLM):
                 "response_format": {"type": "json_object"}, "temperature": temperature, "max_tokens": 12000, "stream": False}
 
 
-PROVIDERS: dict[str, Callable[..., LLM]] = {"gemini": GeminiLLM, "deepseek": DeepSeekLLM, "fireworks": FireworksLLM, "fake": FakeLLM}
+# --------------------------------------------------------------------------------------------- OpenRouter (MiniMax M3.1 Flash free)
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_CACHE_DIR = ROOT / "data" / "processed" / "cache" / "llm_openrouter"
+_THINK = re.compile(r"<think>.*?</think>", re.S | re.I)
+
+
+class OpenRouterLLM(DeepSeekLLM):
+    """OpenRouter's OpenAI-compatible API. Key: OPENROUTER_API_KEY in .env. Model: OPENROUTER_MODEL
+    (default 'minimax/minimax-m3.1-flash:free', MiniMax M3.1 Flash at no charge).
+
+    Free models are limited by OpenRouter to 20 requests a minute and 50 a day (1,000 a day once 10 USD of credits were ever
+    bought). Calls are spaced `min_interval` seconds apart to stay under the per-minute limit; the daily limit stops the run with
+    a clear message instead of retrying. Free endpoints may log prompts: use it for evaluation cases, not for users' questions
+    unless the privacy notice says so."""
+
+    name = "openrouter"
+    URL, KEY_ENV, MODEL_ENV, LABEL = OPENROUTER_URL, "OPENROUTER_API_KEY", "OPENROUTER_MODEL", "OpenRouter"
+    DEFAULT_MODEL = "minimax/minimax-m3.1-flash:free"
+    DEFAULT_CACHE_DIR = OPENROUTER_CACHE_DIR
+
+    def __init__(self, *args, min_interval: float | None = None, clock: Callable[[], float] = time.monotonic, **kwargs):
+        super().__init__(*args, **kwargs)
+        free = self.model.endswith(":free")
+        self.min_interval = (3.2 if free else 0.0) if min_interval is None else min_interval
+        self._clock, self._last_call = clock, None
+
+    def _body(self, model: str, thinking: str, system: str, prompt: str, temperature: float) -> dict:
+        return {"model": model, "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+                "response_format": {"type": "json_object"}, "temperature": temperature, "max_tokens": 12000, "stream": False,
+                "reasoning": {"exclude": True}}
+
+    def _extra_headers(self) -> dict:
+        return {"X-Title": "Customs Copilot (evaluation)"}
+
+    def _pace(self) -> None:
+        now = self._clock()
+        if self._last_call is not None and self.min_interval > 0:
+            wait = self.min_interval - (now - self._last_call)
+            if wait > 0:
+                self._sleep(wait)
+        self._last_call = self._clock()
+
+    def _content(self, j: dict) -> str:
+        if j.get("error") and not j.get("choices"):
+            raise KeyError("error reply")
+        return _THINK.sub("", j["choices"][0]["message"].get("content") or "").strip()
+
+    def _check_fatal(self, status: int, resp) -> None:
+        try:
+            msg = str(((resp.json() or {}).get("error") or {}).get("message") or "")
+        except Exception:
+            msg = (getattr(resp, "text", "") or "")[:300]
+        low = msg.lower()
+        if status == 429 and ("per-day" in low or "per day" in low or "daily" in low):
+            reset = ""
+            try:
+                ms = int((resp.headers or {}).get("X-RateLimit-Reset") or 0)
+                reset = " Resets at " + dt.datetime.fromtimestamp(ms / 1000, dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC") + "." if ms else ""
+            except (ValueError, TypeError, AttributeError):
+                pass
+            raise LLMRateLimited("OpenRouter's daily limit for free models is used up (50 requests a day, or 1,000 a day once 10 USD of "
+                                 f"credits were bought).{reset} Nothing more was sent; finished cases are kept, run again to continue.")
+        if status == 404:
+            hint = (" Free models need the OpenRouter privacy setting that allows free endpoints (openrouter.ai/settings/privacy)."
+                    if "data policy" in low or "endpoints" in low else "")
+            raise LLMUnavailable(f"OpenRouter has no endpoint for model '{self.model}' right now (404).{hint}")
+
+
+PROVIDERS: dict[str, Callable[..., LLM]] = {"gemini": GeminiLLM, "deepseek": DeepSeekLLM, "fireworks": FireworksLLM, "openrouter": OpenRouterLLM, "fake": FakeLLM}
 
 
 def make_llm(provider: str = "gemini", **kwargs) -> LLM:

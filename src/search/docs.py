@@ -226,8 +226,15 @@ def precedent_docs() -> list[dict]:
     return out
 
 
+def vr_docs() -> list[dict]:
+    """FBR valuation rulings (src.ingest.vr_parse): goods and the PCT codes the ruling shows 'for illustrative purposes'.
+    Weaker evidence than a Classification Committee decision; the classifier prompt says so."""
+    p = PROC / "vr" / "vr_docs.json"
+    return json.loads(p.read_text(encoding="utf8")) if p.exists() else []
+
+
 def rulings_all() -> list[dict]:
-    return rulings_docs() + precedent_docs()
+    return rulings_docs() + precedent_docs() + vr_docs()
 
 
 BUILDERS = {"tariff": tariff_docs, "notes": notes_docs, "sro": sro_docs, "rulings": rulings_all}

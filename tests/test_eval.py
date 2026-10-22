@@ -181,3 +181,16 @@ def test_results_file_survives_a_locked_replace(tmp_path, monkeypatch):
     runmod._write_all("plain_llm", {"A": {"case_id": "A", "pred": {"behavior": "answer", "codes": []}}}, tmp_path)
     monkeypatch.setattr(P, "replace", real)
     assert calls["n"] == 6 and set(load_results("plain_llm", tmp_path)) == {"A"}
+
+
+def test_deepseek_peak_window_guard():
+    import datetime as dt
+
+    from src.eval.run import is_deepseek_peak
+
+    utc = dt.timezone.utc
+    assert is_deepseek_peak(dt.datetime(2026, 10, 22, 6, 46, tzinfo=utc))        # Thursday 06:46: peak
+    assert is_deepseek_peak(dt.datetime(2026, 10, 22, 1, 0, tzinfo=utc))
+    assert not is_deepseek_peak(dt.datetime(2026, 10, 22, 4, 0, tzinfo=utc))
+    assert not is_deepseek_peak(dt.datetime(2026, 10, 22, 10, 0, tzinfo=utc))
+    assert not is_deepseek_peak(dt.datetime(2026, 10, 24, 7, 0, tzinfo=utc))     # Saturday: off-peak

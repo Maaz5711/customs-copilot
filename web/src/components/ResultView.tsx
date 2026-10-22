@@ -6,6 +6,7 @@ import type { Candidate, FinalResult, Note } from "@/lib/types";
 import { BillTable, TotalsSummary } from "./BillTable";
 import { CandidateCompare } from "./CandidateCompare";
 import { Feedback } from "./Feedback";
+import { ResearchTrail } from "./ResearchTrail";
 import { Card, Notice, Pill } from "./ui";
 
 const fmtCode = (c: string) => (c.length === 8 ? `${c.slice(0, 4)}.${c.slice(4)}` : c);
@@ -78,6 +79,7 @@ export function ResultView({ result, threadId, onRestart }: { result: FinalResul
   return (
     <div ref={ref} className="grid gap-5" aria-live="polite">
       {(result.status === "answer" || result.status === "cannot_compute" || result.status === "not_sure") && <Pipeline result={result} />}
+      {(result.status === "answer" || result.status === "cannot_compute" || result.status === "not_sure") && <ResearchTrail trace={result.trace} />}
       {(result.status === "answer" || result.status === "cannot_compute") && result.code && (
         <>
           <Card data-reveal>
