@@ -103,7 +103,7 @@ def run_case(system: str, case: Case, llm, **kw) -> dict:
                 expected_behavior=case.behavior, pred=pred, seconds=round(time.time() - t0, 1))
 
 
-def run(systems, cases, llm, out: Path = OUT, rerun_errors: bool = False, log=print, skip_dirs=(), **kw) -> dict:
+def run(systems, cases, llm, out: Path = OUT, rerun_errors: bool = False, log=print, skip_dirs=(), reserve: int = 0, **kw) -> dict:
     """Returns {'done': n, 'skipped': n, 'stopped': reason or None}."""
     done = skipped = 0
     for system in systems:
@@ -116,6 +116,10 @@ def run(systems, cases, llm, out: Path = OUT, rerun_errors: bool = False, log=pr
             if old and not (rerun_errors and old["pred"].get("behavior") == "error"):
                 skipped += 1
                 continue
+            cap = getattr(llm, "max_calls", None)
+            if reserve and cap is not None and llm.stats["live_calls"] + reserve > cap:       # a case that cannot finish inside the budget is not started
+                log(f"STOP before {system} {case.id}: {llm.stats['live_calls']} of {cap} calls used, a case needs up to {reserve}")
+                return dict(done=done, skipped=skipped, stopped="call budget for this run reached")
             try:
                 rec = run_case(system, case, llm, **kw)
             except STOP as e:
