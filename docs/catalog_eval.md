@@ -34,3 +34,22 @@ Reading: adding the valuation rulings did **not** change shortlist recall. 31 of
 
 ## Other websites (TaxFlow and similar)
 No site called TaxFlow turned up for Pakistan. The Pakistani lookup sites found (LawPoint Classifactor, TradeInt, similar) are keyword lookups over the same FBR tariff the project already holds, so they add no new classification knowledge, and bulk-copying a commercial site's compiled database raises terms-of-use and copyright problems that would hurt a pitch to FBR. They are not used as a data source. FBR's own rulings and public notices are.
+
+## LLM results (DeepSeek flash, 2026-10-22; full agent with hints and Classify thinking on)
+Dev sample = 60 random dev cases (seed 11, the same cases for every row). Test = all 86 held-out cases, run **once** for this version and never tuned on. Intervals are 95% Wilson. Labels are AI-written and unverified (see Limits above).
+
+| System | Cases | Exact 8-digit line, first choice | Right 6-digit | Right 4-digit heading | Right line in top 5 |
+|---|---|---|---|---|---|
+| Plain LLM (no search) | dev 60 | 26 (43%, CI 32-56) | 36 (60%) | 50 (83%) | 29 (48%) |
+| LLM + search (no agent graph) | dev 60 | 47 (78%, CI 66-87) | 49 (82%) | 51 (85%) | 50 (83%) |
+| **Full agent** | dev 60 | **57 (95%, CI 86-98)** | 58 (97%) | 58 (97%) | 58 (97%) |
+| Full agent, research step switched off | dev 60 | 57 (95%) | 58 (97%) | 58 (97%) | 58 (97%) |
+| **Full agent, held-out test** | test 86 | **78 (91%, CI 83-95)** | 79 (92%) | 81 (94%) | 82 (95%) |
+
+Cost: about 22 US cents in all for these runs (dev 60 and its baselines, the ablation, test 86), roughly 0.13 cents per question for the full agent.
+
+Reading it honestly:
+* The agent beats the plain model (43%) and model-plus-search (78%) on the same cases. The gap between 78% and 95% is the graph: grounded candidate checks, notes, the separate verification and the retry loop.
+* **The autonomous research step made no difference on this set**: the first choice was identical in all 60 cases with it on and off (it answered "done after 0 actions" almost every time, because the first retrieval already held the line). It costs about one extra model call per question. Its value, if any, is on harder and noisier goods, which this set does not test. Keep it, but do not claim it improved accuracy.
+* These descriptions are clean, written by an AI that knew the tariff wording. Real importer text is terser and noisier: on real cleared Goods Declaration lines the same agent scored 43.6% exact against the declared codes (which are themselves inconsistent), and 54% on the real-ruling set. Expect real use to land between the two.
+* The 8 test misses: 3 asked or hedged with the right line second (C116, C118, C218), 1 returned nothing (C269, table-tennis equipment), and 4 chose a wrong line in the right area (for example 34051010 instead of 34051020, a sibling line). The first test run before any fix is the number above; nothing was tuned on test.
