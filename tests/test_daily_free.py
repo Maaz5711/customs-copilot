@@ -39,7 +39,19 @@ def test_summary_counts_hits_and_warns_about_small_n():
 
 
 def test_missing_key_gives_a_plain_message(monkeypatch, tmp_path):
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    for name in ("OPENROUTER_API_KEY", "GEMINI_API_KEY"):          # a real key in the environment must never turn this test into a live run
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.chdir(tmp_path)                              # no .env here
     with pytest.raises(SystemExit, match="OPENROUTER_API_KEY"):
         daily_free.main([])
+
+
+def test_an_unavailable_model_stops_the_run_and_records_nothing(tmp_path, monkeypatch):
+    from src.agent.llm import LLMUnavailable
+
+    def broken(case, llm, **kw):
+        raise LLMUnavailable("OpenRouter has no endpoint for this model (404)")
+
+    monkeypatch.setitem(runner.RUNNERS, "full_graph", broken)
+    res = runner.run(["full_graph"], [case(i) for i in range(1, 4)], Llm(cap=50), tmp_path, log=lambda *_: None)
+    assert res["done"] == 0 and "no endpoint" in res["stopped"] and runner.load_results("full_graph", tmp_path) == {}
