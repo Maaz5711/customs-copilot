@@ -16,13 +16,13 @@ import random
 import time
 from pathlib import Path
 
-from src.agent.llm import LLMBudgetExceeded, LLMRateLimited
+from src.agent.llm import LLMBudgetExceeded, LLMRateLimited, LLMUnavailable
 
 from .cases import Case, load_cases, load_duty_cases, load_importer_cases
 from .systems import RUNNERS, SYSTEMS
 
 OUT = Path("data/processed/eval")
-STOP = (LLMRateLimited, LLMBudgetExceeded)
+STOP = (LLMRateLimited, LLMBudgetExceeded, LLMUnavailable)      # an unusable model stops the run; nothing is recorded as a result
 
 
 def results_path(system: str, out: Path = OUT) -> Path:
@@ -179,9 +179,10 @@ def main(argv=None):
 
         ov = {k: v for k, v in (("model", a.classify_model), ("thinking", a.classify_thinking)) if v}
         llm = {"deepseek": DeepSeekLLM, "fireworks": FireworksLLM, "openrouter": OpenRouterLLM}[a.llm](max_calls=a.max_llm_calls, overrides={"classify": ov} if ov else None) if a.llm in ("deepseek", "fireworks", "openrouter") else GeminiLLM(max_calls=a.max_llm_calls)
-        cases = select(load_cases(tuple(k for k in a.kinds if k != "duty")) + (load_duty_cases() if "duty" in a.kinds else []) + (load_importer_cases() if "importer" in a.kinds else []), a.sample, a.seed, a.ids)
-        if a.split:
+        cases = load_cases(tuple(k for k in a.kinds if k != "duty")) + (load_duty_cases() if "duty" in a.kinds else []) + (load_importer_cases() if "importer" in a.kinds else [])
+        if a.split:                       # filter first, then sample, so --sample N gives N cases of the split
             cases = [c for c in cases if c.kind != "catalog" or c.split == a.split]
+        cases = select(cases, a.sample, a.seed, a.ids)
         if a.shard:
             i, n = (int(x) for x in a.shard.split("/"))
             cases = cases[i::n]
