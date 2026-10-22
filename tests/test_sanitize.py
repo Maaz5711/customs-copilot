@@ -16,10 +16,10 @@ INTERNAL = re.compile(r"(docs|src)/|data/(raw|processed|ground_truth)|\w\.(md|cs
 @pytest.mark.parametrize("raw, want", [
     ("Sales Tax Act s.3(1A): further tax applies to unregistered persons (docs/duty_formula.md step 7).",
      "Sales Tax Act s.3(1A): further tax applies to unregistered persons."),
-    ("Part III 5.5% or 6% (docs/duty_formula.md OPEN-7).", "Part III 5.5% or 6% (OPEN-7)."),
-    ("so it is added (OPEN-4, docs/gd_findings.md).", "so it is added (OPEN-4)."),
+    ("Part III 5.5% or 6% (docs/duty_formula.md OPEN-7).", "Part III 5.5% or 6%."),
+    ("so it is added (OPEN-4, docs/gd_findings.md).", "so it is added."),
     ("matched through the mapping (a6_fed_mapping.csv); others are not", "matched through the mapping; others are not"),
-    ("no notification in data/raw, OQ-A6-5", "no notification in, OQ-A6-5"),
+    ("no notification in data/raw, OQ-A6-5", "no notification in,"),
     ("see src/tools/compute.py for details", "see for details"),
 ])
 def test_clean_text_removes_internal_refs(raw, want):
@@ -69,4 +69,15 @@ def test_api_replies_are_scrubbed(tmp_path):
         assert r.status_code == 200 and not INTERNAL.search(r.text.replace(".pdf", "")), r.text
     j = c.post("/api/bill", json={"code": "84713010", "value_pkr": 1000}).json()
     assert j["lines"][0]["source_file"] == "202663017637155381064-2026.pdf"
-    assert j["missing_inputs"][0]["why"] == "Part III 5.5% or 6% (OPEN-7)."
+    assert j["missing_inputs"][0]["why"] == "Part III 5.5% or 6%."
+
+
+@pytest.mark.parametrize("raw, want", [
+    ("Part III 5.5% or 6% (OPEN-7).", "Part III 5.5% or 6%."),
+    ("No source document states a rounding rule (OPEN-5). Each line is rounded half-up.", "No source document states a rounding rule. Each line is rounded half-up."),
+    ("not collected (OQ-A6-9); electric vehicles are not computed (OQ-A6-1).", "not collected; electric vehicles are not computed."),
+    ("so it is added (OPEN-4, docs/gd_findings.md).", "so it is added."),
+    ("Sales Tax Act s.3(1A) and the OPENING stock", "Sales Tax Act s.3(1A) and the OPENING stock"),
+])
+def test_internal_open_question_tags_are_removed(raw, want):
+    assert clean_text(raw) == want

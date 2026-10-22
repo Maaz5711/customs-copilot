@@ -35,11 +35,12 @@ function Candidates({ list, title }: { list: Candidate[]; title: string }) {
 
 /** Where this answer stands, in the order a clearance moves: goods, code, duty, sources, ready to check with Customs. */
 function Pipeline({ result }: { result: FinalResult }) {
-  const coded = result.status === "answer" || result.status === "cannot_compute";
+  const waiting = result.status === "needs_input" && !!result.code;
+  const coded = result.status === "answer" || result.status === "cannot_compute" || waiting;
   const steps: [string, "done" | "warn" | "todo", string][] = [
     ["Goods", "done", "described"],
     ["Code", coded ? "done" : result.status === "not_sure" ? "warn" : "todo", coded && result.code ? fmtCode(result.code) : result.status === "not_sure" ? "top candidates" : "not found"],
-    ["Duty", result.status === "answer" ? "done" : result.status === "cannot_compute" ? "warn" : "todo", result.status === "answer" ? "calculated" : result.status === "cannot_compute" ? "partly calculated" : "waiting for the code"],
+    ["Duty", result.status === "answer" ? "done" : result.status === "cannot_compute" || waiting ? "warn" : "todo", result.status === "answer" ? "calculated" : result.status === "cannot_compute" ? "partly calculated" : waiting ? "needs a few facts" : "waiting for the code"],
     ["Sources", coded ? "done" : "todo", coded ? "cited per line" : "—"],
     ["Clearance", "todo", "confirm with Customs"],
   ];
@@ -78,8 +79,8 @@ export function ResultView({ result, threadId, onRestart }: { result: FinalResul
 
   return (
     <div ref={ref} className="grid gap-5" aria-live="polite">
-      {(result.status === "answer" || result.status === "cannot_compute" || result.status === "not_sure") && <Pipeline result={result} />}
-      {(result.status === "answer" || result.status === "cannot_compute" || result.status === "not_sure") && <ResearchTrail trace={result.trace} />}
+      {(result.status === "answer" || result.status === "cannot_compute" || result.status === "not_sure" || result.status === "needs_input") && <Pipeline result={result} />}
+      {(result.status === "answer" || result.status === "cannot_compute" || result.status === "not_sure" || result.status === "needs_input") && <ResearchTrail trace={result.trace} />}
       {(result.status === "answer" || result.status === "cannot_compute") && result.code && (
         <>
           <Card data-reveal>
@@ -122,8 +123,26 @@ export function ResultView({ result, threadId, onRestart }: { result: FinalResul
       )}
 
       {result.status === "refused" && <Notice tone="info" title="I can not help with this request">{result.text?.split("\n").filter(Boolean)[0] ?? "This is outside what the tool covers."}</Notice>}
-      {(result.status === "error" || result.status === "needs_input") && (
-        <Notice tone="bad" title="I could not finish this request"><span className="flex gap-2"><AlertTriangle size={18} className="mt-0.5 shrink-0" aria-hidden="true" />Please try again, or describe the product differently.</span></Notice>
+      {result.status === "needs_input" && (
+        <>
+          {result.code && (
+            <Card data-reveal>
+              <p className="flex items-center gap-2 text-sm font-semibold text-ok"><CheckCircle2 size={18} aria-hidden="true" /> Tariff line found</p>
+              <p className="num mt-1 font-display text-3xl font-semibold">{fmtCode(result.code)}</p>
+              {result.description && <p className="mt-1 max-w-3xl text-ink-2">{result.description}</p>}
+            </Card>
+          )}
+          <Notice tone="info" title="Almost there: a few facts are still missing for the bill">
+            <p>The rules cannot be applied without these. I will not guess them.</p>
+            <ul className="mt-2 list-disc space-y-1.5 pl-5">
+              {(result.missing ?? []).map((m, i) => <li key={i}>{m.question}{m.why ? <span className="text-ink-2"> ({m.why})</span> : null}</li>)}
+            </ul>
+            <p className="mt-2">Ask your clearing agent or the importer, then start a new question and include these details.</p>
+          </Notice>
+        </>
+      )}
+      {result.status === "error" && (
+        <Notice tone="bad" title="I could not finish this request"><span className="flex gap-2"><AlertTriangle size={18} className="mt-0.5 shrink-0" aria-hidden="true" />Please try again in a minute, or describe the product differently.</span></Notice>
       )}
 
       {result.text && (

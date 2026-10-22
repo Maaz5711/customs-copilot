@@ -6,7 +6,8 @@ import type { AgentReply } from "@/lib/types";
 import type { Seed } from "./home/ToolsContext";
 import { Questions } from "./Questions";
 import { ResultView } from "./ResultView";
-import { Field, Notice, Spinner } from "./ui";
+import { Thinking } from "./Thinking";
+import { Field, Notice } from "./ui";
 
 const EXAMPLES = [
   "Men's cotton T-shirts, new, 5,000 pieces, value PKR 2,500,000",
@@ -23,6 +24,7 @@ export function AgentPanel({ date, seed, variant }: { date: string; seed: Seed; 
   const [asked, setAsked] = useState("");
   const [busy, setBusy] = useState(false);
   const [secs, setSecs] = useState(0);
+  const [trace, setTrace] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -30,16 +32,16 @@ export function AgentPanel({ date, seed, variant }: { date: string; seed: Seed; 
   useEffect(() => {
     if (!seed.n) return;
     setText(seed.text); setReply(null); setError(null);
-    if (seed.run && seed.text.trim().length >= 2) { setAsked(seed.text.trim()); run(() => api.ask(seed.text.trim(), date)); }
+    if (seed.run && seed.text.trim().length >= 2) { setAsked(seed.text.trim()); run((on) => api.askStream(seed.text.trim(), date, on)); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seed]);
   useEffect(() => () => { if (timer.current) clearInterval(timer.current); }, []);
 
-  const run = async (fn: () => Promise<AgentReply>) => {
-    setBusy(true); setError(null); setSecs(0);
+  const run = async (fn: (onStep: (line: string) => void) => Promise<AgentReply>) => {
+    setBusy(true); setError(null); setSecs(0); setTrace([]);
     timer.current = setInterval(() => setSecs((s) => s + 1), 1000);
     try {
-      setReply(await fn());
+      setReply(await fn((line) => setTrace((prev) => [...prev, line])));
     } catch (e) {
       setError(e instanceof ApiError ? (e.retryAfter ? `${e.message} (try again in ${e.retryAfter}s)` : e.message) : "Something went wrong.");
     } finally {
@@ -52,7 +54,7 @@ export function AgentPanel({ date, seed, variant }: { date: string; seed: Seed; 
     const q = text.trim();
     if (q.length < 2 || busy) return;
     setAsked(q);
-    run(() => api.ask(q, date));
+    run((on) => api.askStream(q, date, on));
   };
   const restart = () => { setReply(null); setError(null); setText(""); };
 
@@ -92,7 +94,7 @@ export function AgentPanel({ date, seed, variant }: { date: string; seed: Seed; 
         </form>
       )}
 
-      {busy && <Spinner label={`Working on it… ${secs}s. A new question can take up to a minute.`} />}
+      {busy && <Thinking trace={trace} secs={secs} />}
       {error && <Notice tone="bad" title="That did not work">{error}</Notice>}
 
       {reply && !busy && (
@@ -100,7 +102,7 @@ export function AgentPanel({ date, seed, variant }: { date: string; seed: Seed; 
           {asked && <p className="rounded-lg bg-surface-2 px-4 py-3 text-[15px]"><span className="font-semibold">Your product: </span>{asked}</p>}
           {reply.status === "questions" ? (
             <Questions key={reply.questions.map((q) => q.id).join("|")} questions={reply.questions} message={reply.message} notes={reply.notes} busy={busy}
-              onSubmit={(answers) => run(() => api.answer(reply.thread_id, answers))} />
+              onSubmit={(answers) => run((on) => api.answerStream(reply.thread_id, answers, on))} />
           ) : (
             <ResultView result={reply.result} threadId={reply.thread_id} onRestart={restart} />
           )}

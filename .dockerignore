@@ -1,0 +1,11 @@
+.env
+.venv
+.git
+data
+web
+tests
+docs
+design-refs
+design-system
+*.pdf
+*.xlsx

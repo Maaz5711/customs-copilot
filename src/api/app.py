@@ -8,13 +8,14 @@ Security notes: docs/security.md. The API never prints, stores or caches what us
 from __future__ import annotations
 
 import datetime as dt
+import json
 import logging
 import os
 import uuid
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .sanitize import scrub
@@ -23,6 +24,7 @@ from .security import DEFAULT_LIMITS, BodyLimit, RateLimiter, SecurityHeaders, c
 from .service import AgentService, Busy, FeedbackStore
 
 log = logging.getLogger("customs_api")
+NL = chr(10)          # one JSON object per line in the progress stream
 DISCLAIMER = ("Decision support only. This is not an FBR service and not legal or customs advice. Check with Pakistan Customs or a licensed customs agent "
               "before you import. What you type is sent to the AI provider that reads it; do not enter names, phone numbers or other personal data.")
 
@@ -111,6 +113,31 @@ def create_app(service: AgentService | None = None, limiter: RateLimiter | None 
             raise HTTPException(404, detail="This conversation has expired. Please start again.") from None
         except Exception as e:
             raise fail(e, "answer") from None
+
+    def ndjson(events, where: str):
+        """Stream events as one JSON object per line. An error inside the stream becomes a final {'type': 'error'} event (the status line is already sent)."""
+        def gen():
+            try:
+                for ev in events:
+                    yield json.dumps(scrub(ev), ensure_ascii=False) + NL
+            except KeyError:
+                yield json.dumps({"type": "error", "status": 404, "message": "This conversation has expired. Please start again."}) + NL
+            except Exception as e:
+                he = fail(e, where)
+                yield json.dumps({"type": "error", "status": he.status_code, "message": he.detail}) + NL
+        return StreamingResponse(gen(), media_type="application/x-ndjson", headers={"X-Accel-Buffering": "no"})
+
+    @app.post("/api/agent/ask/stream")
+    def ask_stream(body: AskIn, request: Request):
+        limited(request, "agent", "agent_hour")
+        return ndjson(svc.ask_stream(body.question, body.date or _today()), "ask_stream")
+
+    @app.post("/api/agent/answer/stream")
+    def answer_stream(body: AnswerIn, request: Request):
+        limited(request, "agent", "agent_hour")
+        if not body.answers and not body.reply:
+            raise HTTPException(422, detail="Please answer at least one question.")
+        return ndjson(svc.answer_stream(body.thread_id, body.answers, body.reply), "answer_stream")
 
     @app.post("/api/lookup")
     def lookup(body: LookupIn, request: Request):

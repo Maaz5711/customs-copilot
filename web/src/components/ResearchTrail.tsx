@@ -21,7 +21,7 @@ export function trailSteps(trace: string[] | undefined): Step[] {
     else if ((m = t.match(/^explore: notes '(\d{2})'/))) out.push({ key, Icon: BookOpen, title: `Read the Chapter ${m[1]} legal notes`, detail: "Checked what the chapter includes and excludes." });
     else if ((m = t.match(/^explore: rulings '(.+?)'/))) out.push({ key, Icon: FileText, title: "Checked FBR rulings on similar goods", detail: `“${m[1]}”` });
     else if (/^explore: done/.test(t)) out.push({ key, Icon: CheckCircle2, title: "Decided it had looked in the right places" });
-    else if ((m = t.match(/^classify: top (\d{4}\.\d{4}) confidence (\d+)%/)))
+    else if ((m = t.match(/^classify: top (\d{4}\.\d{4}) confidence (\d+)(?:%| out of 100)/)))
       out.push({ key, Icon: Scale, title: `Chose the best line: ${m[1]}`, detail: `Applied the General Rules of Interpretation and the legal notes (${m[2]}% confident).`, tone: "ok" });
     else if (/^classify: .*-> retry/.test(t)) out.push({ key, Icon: RefreshCw, title: "Was not satisfied, searched again", tone: "warn" });
     else if (/^classify: .*asking/.test(t)) out.push({ key, Icon: CircleHelp, title: "Needed one more fact, asked you", tone: "warn" });

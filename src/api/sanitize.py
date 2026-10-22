@@ -13,7 +13,8 @@ import re
 _PATH = (r"(?<![\w/])(?:(?:docs|src)/(?:[\w.\-()]*[\w]/?)*"
          r"|data/(?:raw|processed|ground_truth)\b(?:/[\w.\-()]*[\w])*/?)")
 _FILE = r"[\w\-]+\.(?:md|csv|jsonl?|sqlite|py|ipynb)\b"
-_REF = re.compile(rf"(?:{_PATH}|{_FILE})(?:\s+(?:step|section|§)\s*[\w.\-]+)?", re.IGNORECASE)
+_TAG = r"\b(?:OPEN|OQ)-[A-Z0-9]+(?:-\d+)?\b"      # internal open-question tags such as OPEN-7 or OQ-A6-5: meaningless to users
+_REF = re.compile(rf"(?:{_PATH}|{_FILE})(?:\s+(?:step|section|§)\s*[\w.\-]+)?|{_TAG}", re.IGNORECASE)
 
 
 def clean_text(s: str) -> str:
