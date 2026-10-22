@@ -70,9 +70,11 @@ All numbers come from this repository's own evaluation ([docs/eval_versions.md](
 | **Full agent** | 70 | **54%** (CI 43-65); right line in top 3: 73% | same cases, same model |
 | Real cleared Goods Declaration lines, Chapter 85 | 960 | 43.6%; right 4-digit heading 72.5% | scored against *declared* codes, which are themselves noisy |
 | Duty arithmetic vs FBR's WeBOC calculator | 33 codes | CD, RD, ACD, sales tax (and FED) match to the rupee on **30** | 3 vehicle-part codes differ (open question) |
-| Search shortlist holds the right line (no LLM) | 193 dev / 86 test catalogue cases | 90% / 91% | everyday goods across 93 chapters; labels AI-written, unverified |
+| Everyday goods across 93 chapters, plain LLM / LLM + search / **full agent** | 60 (same cases) | 43% / 78% / **95%** | AI-written, unverified labels, clean descriptions |
+| Same agent on the **held-out test split** (run once, never tuned on) | 86 | **91%** (CI 83-95) | right 4-digit heading 94% |
+| Search shortlist holds the right line (no LLM) | 193 dev / 86 test | 90% / 91% | the ceiling for the classification step |
 
-Honest reading: the agent clearly beats a plain model and a search-only model on the same cases, and it is not yet accurate enough to replace a customs expert. More data (office-cleared cases, amendments to FBR notifications) is the main lever, and the evaluation harness is built to take it.
+Honest reading: the agent clearly beats a plain model and a search-only model on the same cases. The 91-95% on everyday goods comes from clean, AI-written descriptions; on real, terse importer text it is far lower (43.6% on real declaration lines, 54% on disputed rulings), so it is not accurate enough to replace a customs expert. The autonomous research step made no measurable difference on the everyday-goods set (details in [docs/catalog_eval.md](docs/catalog_eval.md)). More data (office-cleared cases, amendments to FBR notifications) is the main lever, and the evaluation harness is built to take it.
 
 ## Data and legal position
 
