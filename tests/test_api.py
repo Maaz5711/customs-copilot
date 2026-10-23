@@ -1,4 +1,5 @@
 """Web API tests: validation, security headers, rate limits, privacy of feedback, error mapping. A stub agent stands in for the LLM (no network)."""
+import pathlib
 import sqlite3
 import threading
 
@@ -51,6 +52,7 @@ def client(stub, tmp_path):
     return TestClient(app)
 
 
+@pytest.mark.skipif(not pathlib.Path("data/processed/legal_store.sqlite").exists(), reason="needs the built data store (README, Quick start)")
 def test_security_headers_and_no_store(client):
     r = client.get("/api/meta")
     assert r.status_code == 200 and r.headers["cache-control"] == "no-store" and r.headers["x-frame-options"] == "DENY"
