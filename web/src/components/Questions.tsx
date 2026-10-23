@@ -16,7 +16,10 @@ export function Questions({ questions, message, notes, busy, onSubmit }: {
   const uid = useId();
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const set = (id: string, v: string) => setAnswers((a) => ({ ...a, [id]: v }));
-  const ready = Object.values(answers).some((v) => v.trim());
+  const required = questions.filter((q) => !q.optional);
+  const onlyOptional = required.length === 0;
+  // Send is allowed once a required question is answered; when every question is optional it is always allowed (it then means "skip").
+  const ready = onlyOptional || required.some((q) => (answers[q.id] ?? "").trim());
 
   return (
     <form
@@ -24,6 +27,7 @@ export function Questions({ questions, message, notes, busy, onSubmit }: {
       onSubmit={(e) => {
         e.preventDefault();
         const clean = Object.fromEntries(Object.entries(answers).filter(([, v]) => v.trim()));
+        for (const q of questions) if (q.optional && !clean[q.id]) clean[q.id] = IDK;      // an optional question left empty is skipped, not asked again
         if (Object.keys(clean).length) onSubmit(clean);
       }}
     >
@@ -39,7 +43,8 @@ export function Questions({ questions, message, notes, busy, onSubmit }: {
         const grouped = options.length > 0;
         return (
           <fieldset key={q.id} className="grid gap-2 rounded-xl border border-line bg-surface p-4" aria-describedby={q.why ? `${id}-why` : undefined}>
-            <legend className="px-1 text-[16px] font-semibold"><span className="mr-2 text-ink-2">{i + 1}.</span>{q.question}</legend>
+            <legend className="px-1 text-[16px] font-semibold"><span className="mr-2 text-ink-2">{i + 1}.</span>{q.question}{q.optional && <span className="ml-2 rounded-full border border-line px-2 py-0.5 align-middle text-xs font-medium text-ink-2">Optional</span>}</legend>
+            {q.optional && <p className="text-sm text-ink-2">Only answer this if you want me to check for a lower customs duty. Skip it and I use the standard rates.</p>}
             {q.why && <p id={`${id}-why`} className="text-sm text-ink-2">Why I ask: {q.why}</p>}
             {q.error && <p className="text-sm text-bad" role="alert">I could not use your last answer: {q.error}</p>}
             {grouped ? (
@@ -47,10 +52,11 @@ export function Questions({ questions, message, notes, busy, onSubmit }: {
                 {[...options, IDK].map((o) => {
                   const v = isYesNo(q) && o !== IDK ? o.toLowerCase() : o;
                   const on = val === v;
+                  const shown = o === IDK && q.optional ? "Skip" : o;
                   return (
                     <label key={o} className={`inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3.5 py-2 text-[15px] transition-colors ${on ? "border-blue bg-surface-2 font-semibold" : "border-line hover:bg-surface-2"}`}>
                       <input type="radio" name={id} className="size-4" checked={on} onChange={() => set(q.id, v)} />
-                      {o}
+                      {shown}
                     </label>
                   );
                 })}
@@ -69,7 +75,7 @@ export function Questions({ questions, message, notes, busy, onSubmit }: {
                     placeholder={q.type === "money_pkr" ? "Amount in PKR, e.g. 2500000" : q.type === "quantity" ? `Number${q.unit ? ` in ${q.unit}` : ""}` : "Type your answer"}
                   />
                 </div>
-                <Button variant="secondary" onClick={() => set(q.id, IDK)} aria-pressed={val === IDK}>{IDK}</Button>
+                <Button variant="secondary" onClick={() => set(q.id, IDK)} aria-pressed={val === IDK}>{q.optional ? "Skip" : IDK}</Button>
               </div>
             )}
           </fieldset>
@@ -77,7 +83,7 @@ export function Questions({ questions, message, notes, busy, onSubmit }: {
       })}
       <div>
         <button type="submit" disabled={!ready || busy} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand px-5 py-2 text-[15px] font-semibold text-on-brand transition-opacity hover:opacity-90">
-          {busy ? "Working…" : "Send answers"}
+          {busy ? "Working…" : onlyOptional && !Object.values(answers).some((v) => v.trim() && v !== IDK) ? "Skip and show the standard bill" : "Send answers"}
         </button>
       </div>
     </form>

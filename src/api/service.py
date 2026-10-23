@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 FEEDBACK_DB = ROOT / "data" / "processed" / "feedback" / "feedback.sqlite"
-QUESTION_KEYS = ("id", "question", "why", "type", "allowed", "unit", "error")
+QUESTION_KEYS = ("id", "question", "why", "type", "allowed", "unit", "error", "optional")
 
 
 class Busy(Exception):

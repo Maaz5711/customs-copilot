@@ -37,7 +37,7 @@ GOODS_Q = "What product do you want to import? Describe it in a sentence: what i
 DATE_Q = ("On which date should the rules apply? Please give a full date such as 2026-07-15. I do not assume today's date, "
           "and I only cover {lo} to {hi} (FY2025-26 and FY2026-27).")
 WHICH_Q = "Your message mentions more than one product. Which one should I work on first? I handle one product at a time."
-VALUE_Q = "What is the assessable (customs) value of the goods in PKR? I do not convert currencies."
+VALUE_Q = "What is the total value of the goods in PKR (the customs value: usually the invoice value plus freight and insurance)? I do not convert currencies."
 
 
 # --------------------------------------------------------------------------------------------- state and deps
@@ -120,9 +120,9 @@ def _err_update(e: Exception) -> dict:
     return {"mode": "error", "error": {"type": type(e).__name__, "message": str(e)}, "route": "respond", "trace": [f"error: {type(e).__name__}"]}
 
 
-def _q(qid: str, kind: str, question: str, why: str | None = None, allowed=None, unit: str | None = None, fld: str | None = None) -> dict:
+def _q(qid: str, kind: str, question: str, why: str | None = None, allowed=None, unit: str | None = None, fld: str | None = None, optional: bool = False) -> dict:
     f = fld or qid
-    return {"id": qid, "field": f, "kind": kind, "question": question, "why": why, "allowed": allowed, "unit": unit, "type": spec_for(f, allowed)["type"]}
+    return {"id": qid, "field": f, "kind": kind, "question": question, "why": why, "allowed": allowed, "unit": unit, "type": spec_for(f, allowed)["type"], "optional": optional}
 
 
 def _call(deps: Deps, task: str, system: str, prompt: str):
@@ -659,7 +659,11 @@ def _set_probe(probe: dict, m: dict, value) -> None:
 
 
 def discover_missing(tools: ToolBox, code: str, date_iso: str, args: dict, value: str, seed: list | None = None, max_rounds: int = 5) -> list:
-    """Every input the rules need, across all stages of compute_duty.
+    return discover_missing_with_result(tools, code, date_iso, args, value, seed, max_rounds)[0]
+
+
+def discover_missing_with_result(tools: ToolBox, code: str, date_iso: str, args: dict, value: str, seed: list | None = None, max_rounds: int = 5) -> tuple[list, dict | None]:
+    """Every input the rules need, across all stages of compute_duty, plus the last tool response (computed with stand-in answers, or None).
 
     compute_duty reports missing inputs stage by stage (for a car, the income-tax question only appears once the vehicle questions are
     answered), which would force several rounds of questions. Here the tool is called again with a stand-in answer for each missing field
@@ -668,10 +672,12 @@ def discover_missing(tools: ToolBox, code: str, date_iso: str, args: dict, value
     found: list = []
     seen: set[str] = set()
     missing = seed
+    last: dict | None = None
     for _ in range(max_rounds):
         if missing is None:
             r = tools.compute_duty(code, value, date_iso, **probe)
             if r.get("status") != "needs_input":
+                last = r
                 break
             missing = r.get("missing_inputs", [])
         new = [m for m in missing if m["field"] not in seen]
@@ -682,7 +688,7 @@ def discover_missing(tools: ToolBox, code: str, date_iso: str, args: dict, value
             found.append(m)
             _set_probe(probe, m, _placeholder(m))
         missing = None
-    return found
+    return found, last
 
 
 def concession_questions(duty: dict, asked: list, unknown: list) -> list:
@@ -692,9 +698,9 @@ def concession_questions(duty: dict, asked: list, unknown: list) -> list:
     out: list = []
     for q in con.get("questions", []):
         if q["id"] == "origin_country" and "goods.origin_country" not in asked and "goods.origin_country" not in unknown:
-            out.append(_q("goods.origin_country", "duty_input", q["question"], why=q.get("why")))
+            out.append(_q("goods.origin_country", "duty_input", q["question"], why=q.get("why"), optional=True))
         elif q["id"] == "certificate_of_origin" and "goods.has_certificate_of_origin" not in asked and "goods.has_certificate_of_origin" not in unknown:
-            out.append(_q("goods.has_certificate_of_origin", "duty_input", q["question"], why=q.get("why"), allowed=[True, False]))
+            out.append(_q("goods.has_certificate_of_origin", "duty_input", q["question"], why=q.get("why"), allowed=[True, False], optional=True))
     fta = con.get("china_fta") or {}
     if fta.get("origin") is True and fta.get("certificate") is True and fta.get("options") and "goods.claim_china_fta" not in asked and "goods.claim_china_fta" not in unknown:
         o = fta["options"][0]
@@ -702,7 +708,7 @@ def concession_questions(duty: dict, asked: list, unknown: list) -> list:
                       f"You said the goods are of Chinese origin and you hold a Form E. Do you want the bill calculated with the China-Pakistan FTA rate "
                       f"({o['listed_rate']} is printed in the SRO for that year, so customs duty {o['effective_cd_pct']}% instead of {o['tariff_cd_pct']}%)? "
                       "You must be able to show the certificate to Customs. I will show the bill with and without it.",
-                      why="SRO 1640(I)/2019 conditions: goods of Chinese origin with the certificate of origin.", allowed=[True, False]))
+                      why="SRO 1640(I)/2019 conditions: goods of Chinese origin with the certificate of origin.", allowed=[True, False], optional=True))
     for o in (con.get("fifth_schedule") or {}).get("options", [])[:2]:
         f = f"claim.{o['rule_id']}"
         if f in asked or f in unknown or o.get("effective_cd_pct") is None or o["rule_id"] not in {x for q in con.get("questions", []) for x in (q.get("allowed") or []) if isinstance(x, str)}:
@@ -711,21 +717,31 @@ def concession_questions(duty: dict, asked: list, unknown: list) -> list:
         out.append(_q(f, "duty_input",
                       f"The Fifth Schedule ({o['clause']}: {o['description'][:140]}) lists {o['listed_rate']}, which would make the customs duty {o['effective_cd_pct']}% instead of "
                       f"{o['tariff_cd_pct']}%. Does the importer meet its conditions? Conditions (not checked by me): {conds[:600]} Answer yes or no.",
-                      why="A Fifth Schedule entry replaces the normal customs duty only if its conditions are met (Customs Act s.18(1A)).", allowed=[True, False], fld=f))
+                      why="A Fifth Schedule entry replaces the normal customs duty only if its conditions are met (Customs Act s.18(1A)).", allowed=[True, False], fld=f, optional=True))
     return out[:3]
+
+
+def early_origin_question(probe_duty: dict | None, asked: list, unknown: list) -> list:
+    """The origin question, taken from the last stand-in response, so it joins the first round of questions instead of costing a round of its own.
+    Only the question is used (it holds no figures); the certificate and claim questions still wait until the answer is known."""
+    return [q for q in concession_questions(probe_duty or {}, asked, unknown) if q["field"] == "goods.origin_country"]
 
 
 def make_calculate(deps: Deps):
     cfg = deps.cfg
 
-    def ask_or_stop(lookup: dict, missing: list, unknown: list, rounds_left: bool, with_value: str | None, label: str) -> dict:
+    def ask_or_stop(lookup: dict, missing: list, unknown: list, rounds_left: bool, with_value: str | None, label: str, extra: list | None = None, asked: list | None = None) -> dict:
         qs = _missing_to_questions(missing, unknown)
         if with_value is not None:
             qs = [_q("assessable_value_pkr", "duty_input", with_value, why="Customs duty, sales tax and income tax are percentages of the value (Customs Act s.25).")] + qs
         if not qs or not rounds_left:
             unresolved = ([{"question": VALUE_Q}] if with_value is not None else []) + [{"question": m["question"], "why": m.get("why")} for m in missing]
             return {"mode": "needs_input", "unresolved": unresolved, "lookup": lookup, "duty": None, "route": "respond", "trace": [f"calculate: {label}, cannot ask more"]}
-        return {"lookup": lookup, "pending_questions": qs, "clarify_kind": "duty_input", "route": "clarify", "trace": [f"calculate: {label} -> asking {[q['field'] for q in qs]}"]}
+        early = list(extra or [])
+        out = {"lookup": lookup, "pending_questions": qs + early, "clarify_kind": "duty_input", "route": "clarify", "trace": [f"calculate: {label} -> asking {[q['field'] for q in qs + early]}"]}
+        if early:
+            out["concession_asked"] = list(asked or []) + [q["field"] for q in early]
+        return out
 
     def calculate(state: AgentState) -> dict:
         code, date_iso = state["chosen_code"], state["as_of_date"]
@@ -738,13 +754,15 @@ def make_calculate(deps: Deps):
         rounds_left = state.get("clarify_rounds", 0) < cfg.max_clarify_rounds
         if value is None:
             # No value yet: ask for it together with everything else the rules need (discovered with a 1 PKR stand-in value whose numbers are discarded).
-            missing = discover_missing(deps.tools, code, date_iso, args, "1")
+            missing, last = discover_missing_with_result(deps.tools, code, date_iso, args, "1")
             vq = VALUE_Q + (f" ({facts['value_issue']})" if facts.get("value_issue") else "")
-            return ask_or_stop(lookup, missing, unknown, rounds_left, None if "assessable_value_pkr" in unknown else vq, "value missing")
+            early = early_origin_question(last, list(state.get("concession_asked") or []), unknown) if cfg.ask_concessions else []
+            return ask_or_stop(lookup, missing, unknown, rounds_left, None if "assessable_value_pkr" in unknown else vq, "value missing", early, list(state.get("concession_asked") or []))
         duty = deps.tools.compute_duty(code, value, date_iso, **args)
         if duty.get("status") == "needs_input":
-            missing = discover_missing(deps.tools, code, date_iso, args, value, seed=duty["missing_inputs"])
-            return ask_or_stop(lookup, missing, unknown, rounds_left, None, "needs_input")
+            missing, last = discover_missing_with_result(deps.tools, code, date_iso, args, value, seed=duty["missing_inputs"])
+            early = early_origin_question(last, list(state.get("concession_asked") or []), unknown) if cfg.ask_concessions else []
+            return ask_or_stop(lookup, missing, unknown, rounds_left, None, "needs_input", early, list(state.get("concession_asked") or []))
         if duty.get("status") not in ("computed", "cannot_compute"):
             return {"lookup": lookup, "duty": duty, "route": "verify", "trace": [f"calculate: tool status {duty.get('status')}"]}
         asked = list(state.get("concession_asked") or [])
