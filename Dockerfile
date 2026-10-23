@@ -1,12 +1,15 @@
-# Customs Copilot API (FastAPI + the LangGraph agent). One process: the rate limiter and conversations live in memory.
+# Customs Copilot API for any container host (Google Cloud Run, Render, Koyeb, Fly.io, a VM). One process: the rate limiter and conversations live in memory,
+# so run a single instance (Cloud Run: --max-instances 1).
 FROM python:3.13-slim
-ENV PYTHONUNBUFFERED=1 API_HOST=0.0.0.0 API_PORT=8000 TRUST_PROXY=1 API_HSTS=1
+ENV PYTHONUNBUFFERED=1 FASTEMBED_CACHE_PATH=/app/.fastembed LLM_PROVIDER=deepseek PORT=8080
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt huggingface_hub
+# fetch the two small local models at build time so a cold start only has to load them
+RUN python -c "from fastembed import TextEmbedding; from fastembed.rerank.cross_encoder import TextCrossEncoder; TextEmbedding('BAAI/bge-small-en-v1.5'); TextCrossEncoder('Xenova/ms-marco-MiniLM-L-6-v2')"
 COPY src ./src
-# The legal store and the search indexes are NOT in this image and NOT in git: build them from the official FBR PDFs
-# (see docs/sources.md and README), then put data/processed/legal_store.sqlite and data/processed/search_index/ under /app/data/processed/
-# (a mounted volume, or a private download at start-up). Set ALLOWED_HOSTS, DEEPSEEK_API_KEY (or another provider key) and API_MAX_LLM_CALLS as environment variables.
-EXPOSE 8000
-CMD ["python", "-m", "src.api"]
+COPY deploy ./deploy
+COPY data/ground_truth ./data/ground_truth
+# The legal store and search indexes are NOT in the image or in git: deploy/start.py downloads them at start-up from a private dataset (see docs/DEPLOY.md).
+EXPOSE 8080
+CMD ["python", "deploy/start.py"]

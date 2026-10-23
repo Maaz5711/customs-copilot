@@ -14,4 +14,4 @@ RUN pip install --no-cache-dir -r requirements.txt huggingface_hub
 RUN python -c "from fastembed import TextEmbedding; from fastembed.rerank.cross_encoder import TextCrossEncoder; TextEmbedding('BAAI/bge-small-en-v1.5'); TextCrossEncoder('Xenova/ms-marco-MiniLM-L-6-v2')"
 ENV API_HOST=0.0.0.0 API_PORT=7860 TRUST_PROXY=1 API_HSTS=1 LLM_PROVIDER=deepseek
 EXPOSE 7860
-CMD ["python", "deploy/hf-space/start.py"]
+CMD ["python", "deploy/start.py"]
