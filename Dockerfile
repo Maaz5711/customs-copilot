@@ -4,7 +4,7 @@ FROM python:3.13-slim
 ENV PYTHONUNBUFFERED=1 FASTEMBED_CACHE_PATH=/app/.fastembed LLM_PROVIDER=deepseek PORT=8080
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt huggingface_hub
+RUN pip install --no-cache-dir -r requirements.txt google-cloud-storage
 # fetch the two small local models at build time so a cold start only has to load them
 RUN python -c "from fastembed import TextEmbedding; from fastembed.rerank.cross_encoder import TextCrossEncoder; TextEmbedding('BAAI/bge-small-en-v1.5'); TextCrossEncoder('Xenova/ms-marco-MiniLM-L-6-v2')"
 COPY src ./src
