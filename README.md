@@ -4,11 +4,15 @@
 
 [![License: MIT](https://img.shields.io/badge/code%20license-MIT-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.13-3776AB)
-![Tests](https://img.shields.io/badge/tests-547%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-547%20(with%20data%20built)-brightgreen)
 ![Status](https://img.shields.io/badge/status-public%20beta-orange)
 
 > **Independent project. Not an official product.**
 > Customs Copilot is **not** a product of, affiliated with, or endorsed by the Federal Board of Revenue (FBR), Pakistan Customs, or the Government of Pakistan. It is built by an independent developer from publicly available FBR documents. It gives **decision support, not legal, tax or customs advice**: classification and duty are decided by Pakistan Customs at assessment. Always confirm with Customs or a licensed customs agent before you rely on a code or a figure. See [DISCLAIMER.md](DISCLAIMER.md).
+
+## Try it live
+
+No installation needed: a hosted public beta is being prepared and its link will appear here. Describe your goods in English or Roman Urdu and watch the agent research, classify and calculate, step by step. (Running the code yourself is optional, see [Run it yourself](#run-it-yourself-optional).)
 
 ## What it does
 
@@ -96,7 +100,10 @@ Honest reading: the agent clearly beats a plain model and a search-only model on
 | Web | Next.js 16, React 19, TypeScript, Tailwind 4, Three.js scroll story, strict Content-Security-Policy |
 | Quality | 547 tests (scripted fake LLM, no network), evaluation harness with ablations and a baseline |
 
-## Quick start
+## Run it yourself (optional)
+
+The repository holds the code, not the FBR documents or the tables derived from them, so you build the data once from the official PDFs.
+
 
 ```bash
 # 1. Python environment
@@ -115,7 +122,7 @@ python -m src.api                    # API on 127.0.0.1:8000
 cd web && npm install && npm run dev # website on 127.0.0.1:3000
 ```
 
-Tests: `python -m pytest -q`. Evaluation: `python -m src.eval.run --help`, retrieval-only check: `python -m src.eval.retrieval_eval --split dev`.
+Tests: `python -m pytest -q`. Tests that need the built data are skipped, with a reason, until you have built it (all 547 pass with the data present). Evaluation: `python -m src.eval.run --help`, retrieval-only check: `python -m src.eval.retrieval_eval --split dev`.
 
 ## Repository map
 
