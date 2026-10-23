@@ -9,7 +9,7 @@
     python deploy/hf-space/deploy.py --allowed-hosts my-site.vercel.app   # also allow the website's domain to call the API
 
 What happens: (1) a PRIVATE dataset <you>/customs-copilot-data gets data/processed/legal_store.sqlite and data/processed/search_index (about 70 MB,
-derived from FBR documents, so it stays private); (2) a public Space <you>/customs-copilot-api (Docker) gets the Dockerfile and README (the code is
+derived from FBR documents, so it stays private); (2) a public Space <you>/customs-copilot-api (Docker, needs the HF PRO plan) gets the Dockerfile and README (the code is
 cloned from the public GitHub repository at build time); (3) secrets and variables are set; (4) the script waits for the Space to run.
 """
 from __future__ import annotations
