@@ -33,6 +33,20 @@ function Candidates({ list, title }: { list: Candidate[]; title: string }) {
   );
 }
 
+/** The tariff description arrives as a long path ("heading > sub-heading > line"). Show the specific line first and the path in small print. */
+function Description({ text }: { text?: string }) {
+  const parts = (text ?? "").split(" > ").map((s) => s.trim()).filter(Boolean);
+  if (!parts.length) return null;
+  const last = parts[parts.length - 1] ?? "";
+  const path = parts.slice(0, -1);
+  return (
+    <div className="mt-1 max-w-3xl">
+      <p className="text-[17px] font-medium leading-snug text-ink">{last}</p>
+      {path.length > 0 && <p className="mt-1 text-sm leading-relaxed text-ink-2">{path.join(" › ")}</p>}
+    </div>
+  );
+}
+
 /** Where this answer stands, in the order a clearance moves: goods, code, duty, sources, ready to check with Customs. */
 function Pipeline({ result }: { result: FinalResult }) {
   const waiting = result.status === "needs_input" && !!result.code;
@@ -88,7 +102,7 @@ export function ResultView({ result, threadId, onRestart }: { result: FinalResul
               <div>
                 <p className="flex items-center gap-2 text-sm font-semibold text-ok"><CheckCircle2 size={18} aria-hidden="true" /> Tariff line found</p>
                 <p className="num mt-1 font-display text-3xl font-semibold">{fmtCode(result.code)}</p>
-                <p className="mt-1 max-w-3xl text-ink-2">{result.description}</p>
+                <Description text={result.description} />
               </div>
               <div className="flex flex-wrap gap-2">
                 {conf(result.confidence) && <Pill tone="gold">{conf(result.confidence)}</Pill>}
@@ -129,7 +143,7 @@ export function ResultView({ result, threadId, onRestart }: { result: FinalResul
             <Card data-reveal>
               <p className="flex items-center gap-2 text-sm font-semibold text-ok"><CheckCircle2 size={18} aria-hidden="true" /> Tariff line found</p>
               <p className="num mt-1 font-display text-3xl font-semibold">{fmtCode(result.code)}</p>
-              {result.description && <p className="mt-1 max-w-3xl text-ink-2">{result.description}</p>}
+              {result.description && <Description text={result.description} />}
             </Card>
           )}
           <Notice tone="info" title="Almost there: a few facts are still missing for the bill">
