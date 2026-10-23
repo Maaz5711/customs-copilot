@@ -274,7 +274,7 @@ def _compute_core(code, assessable_value_pkr, as_of_date, importer=None, quantit
     # ---------------- importer status (required: further tax and the documents' registered/unregistered split)
     reg = str(facts.i("registration_status") or "").strip().lower()
     if reg not in ("registered", "unregistered"):
-        bill.need("importer.registration_status", "Is the importer registered under the Sales Tax Act 1990 (registered) or not (unregistered)?",
+        bill.need("importer.registration_status", "Is the importer registered for sales tax with FBR (has an STRN), or not?",
                   "Sales Tax Act s.3(1A): further tax applies to unregistered persons.", ["registered", "unregistered"], ["further_tax"])
 
     # ---------------- CD
@@ -524,7 +524,7 @@ def _compute_core(code, assessable_value_pkr, as_of_date, importer=None, quantit
             elif "(2)(x)" in cl:
                 v = facts.ib("manufacturer_in_house_use")
                 if v is None:
-                    bill.need("importer.manufacturer_in_house_use", "Is the importer a manufacturer importing this plant/machinery for in-house installation or use? (yes/no)",
+                    bill.need("importer.manufacturer_in_house_use", "Are you a manufacturer importing this machinery to install and use in your own factory (not to resell it)? (yes/no)",
                               "Value addition tax is not charged on such imports (Twelfth Schedule cond. (2)(x)).", [True, False], ["VAT"])
                     ask = True
                 elif v:
@@ -603,7 +603,7 @@ def _compute_core(code, assessable_value_pkr, as_of_date, importer=None, quantit
                 bill.assume("PROVISOS")
                 comm = facts.ib("commercial_importer")
                 if cls >= 2 and comm is None:
-                    bill.need("importer.commercial_importer", "Is the importer a commercial importer (imports for sale in the same condition)? (yes/no)",
+                    bill.need("importer.commercial_importer", "Do you import these goods to sell them as they are (a commercial importer), rather than to use them or to make other products? (yes/no)",
                               "First Schedule Part II: Part II goods 2% or 3.5% for a commercial importer; Part III 5.5% or 6% (OPEN-7).", [True, False], ["income_tax"])
                 else:
                     want = "commercial importer" if (cls >= 2 and comm) else "persons (any importer)"
@@ -632,7 +632,7 @@ def _compute_core(code, assessable_value_pkr, as_of_date, importer=None, quantit
                     base_it_label = "V + CD + RD + ACD + FED + SED + ST + VAT (ITO First Schedule Part II col. 3, s.148(9)(b))"
                 atl = facts.ib("active_taxpayer")
                 if base_it is not None and atl is None:
-                    bill.need("importer.active_taxpayer", "Is the importer on FBR's Active Taxpayers List (a 'filer')? (yes/no)",
+                    bill.need("importer.active_taxpayer", "Is the importer on FBR's Active Taxpayer List (a 'filer')? Importers who are not on the list pay double income tax at import. (yes/no)",
                               "ITO Tenth Schedule rule 1: for a person who is not on the list, the income tax collected at import is doubled (for example 6% becomes 12% for a commercial importer of Part III goods).",
                               [True, False], ["income_tax"])
                 elif base_it is not None:

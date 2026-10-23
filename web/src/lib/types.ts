@@ -11,6 +11,7 @@ export type Question = {
   allowed?: (string | boolean)[] | null;
   unit?: string | null;
   error?: string | null;
+  optional?: boolean; // a question that only matters for a possible lower customs duty: it can be skipped
 };
 
 export type Candidate = {
