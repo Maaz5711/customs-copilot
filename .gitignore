@@ -36,3 +36,7 @@ data/processed/eval/fireworks_*/
 
 # third-party design references (screen recordings of other people's sites): local only
 design-refs/
+
+# packed data zip for deployment (derived from FBR documents: never commit)
+deploy/out/
+*.zip
