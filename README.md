@@ -12,7 +12,7 @@
 
 ## Try it live
 
-No installation needed: a hosted public beta is being prepared and its link will appear here. Describe your goods in English or Roman Urdu and watch the agent research, classify and calculate, step by step. (Running the code yourself is optional, see [Run it yourself](#run-it-yourself-optional).)
+**[customs-copilot-pi.vercel.app](https://customs-copilot-pi.vercel.app/)** (public beta, no installation needed). Describe your goods in English or Roman Urdu and watch the agent research, classify and calculate, step by step. The first question after a quiet period can take about a minute while the server wakes up. (Running the code yourself is optional, see [Run it yourself](#run-it-yourself-optional).)
 
 ## What it does
 
