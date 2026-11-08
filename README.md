@@ -185,7 +185,7 @@ Planned, **not yet done**, in rough priority order:
 
 | Area | Choices |
 |---|---|
-| Agent | Python 3.13, LangGraph (state graph, `interrupt`, SQLite checkpointer), MCP tool server |
+| Agent | Python 3.13, LangGraph (state graph, `interrupt`, checkpointer: in memory on the live site so product text is never written to disk, SQLite optional on the command line), MCP tool server |
 | Retrieval | rank-bm25, fastembed (bge-small-en-v1.5, ONNX), cross-encoder re-ranking (MiniLM), reciprocal rank fusion |
 | Data | SQLite dated legal store, PyMuPDF and pdfplumber, vision-model reading of scanned SROs with validators |
 | LLMs | Adapters for DeepSeek (default), Google Gemini, Fireworks and OpenRouter, with caching, quotas and call caps |
