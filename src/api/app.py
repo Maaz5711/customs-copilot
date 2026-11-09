@@ -61,7 +61,7 @@ def create_app(service: AgentService | None = None, limiter: RateLimiter | None 
 
     @contextlib.contextmanager
     def slot(kind: str):
-        if not gates[kind].acquire(timeout=20):
+        if not gates[kind].acquire(timeout=float(os.environ.get("API_SLOT_WAIT", "20"))):
             raise Busy("The service is busy right now. Please try again in a minute.")
         try:
             yield

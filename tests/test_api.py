@@ -156,3 +156,28 @@ def test_one_answer_at_a_time_per_conversation(stub):
     with pytest.raises(Exception, match="still working"):
         svc.answer(TID, {"material": "x"}, None)
     lock.release()
+
+
+def test_busy_server_answers_503_instead_of_piling_up(monkeypatch):
+    """With one lookup slot taken, the next visitor waits briefly and gets a polite 503 (not a crash); the slot frees up afterwards."""
+    monkeypatch.setenv("API_MAX_LOOKUPS", "1")
+    monkeypatch.setenv("API_SLOT_WAIT", "0.2")
+    started, release = threading.Event(), threading.Event()
+
+    def slow_lookup(q, d, k, ch, cd):
+        started.set()
+        release.wait(5)
+        return {"status": "ok"}
+
+    app = create_app(service=AgentService(agent=StubAgent()), limiter=RateLimiter(LIMITS), feedback=None, lookup_fn=slow_lookup, allowed_hosts=["testserver"])
+    c = TestClient(app)
+    first = {}
+    t = threading.Thread(target=lambda: first.update(r=c.post("/api/lookup", json={"query": "cotton shirt"})))
+    t.start()
+    assert started.wait(5)
+    busy = c.post("/api/lookup", json={"query": "cotton shirt"})
+    assert busy.status_code == 503 and busy.headers.get("retry-after") == "60"
+    release.set()
+    t.join(5)
+    assert first["r"].status_code == 200
+    assert c.post("/api/lookup", json={"query": "cotton shirt"}).status_code == 200
