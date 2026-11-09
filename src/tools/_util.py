@@ -18,28 +18,30 @@ from src.store.resolve import norm_code, resolve_candidates
 getcontext().prec = 50
 
 _LOCK = threading.Lock()
-_CONN: dict[str, object] = {}
+_LOCAL = threading.local()          # one connection per thread: a SQLite connection must not be used by two threads at once
 
 
 # --------------------------------------------------------------------------- store access
 def get_conn(db_path=None):
-    """One shared read-only style connection per database path. Builds the store if it is missing."""
+    """One read-only style connection per database path and per thread (the web server runs requests in a thread pool). Builds the store if it is missing."""
     path = Path(db_path or os.environ.get("CUSTOMS_DB") or DEFAULT_DB_PATH)
     key = str(path)
-    with _LOCK:
-        if key in _CONN:
-            return _CONN[key]
+    conns = getattr(_LOCAL, "conns", None)
+    if conns is None:
+        conns = _LOCAL.conns = {}
+    if key in conns:
+        return conns[key]
+    with _LOCK:                                  # building the store must happen once, not in every thread
         if not path.exists():
             from src.store.build import build  # rebuild from data/processed (never touches data/raw)
 
             build(path)
-        # tools run in MCP worker threads; the connection is only used for reads
-        import sqlite3
+    import sqlite3
 
-        conn = sqlite3.connect(str(path), check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        _CONN[key] = conn
-        return conn
+    conn = sqlite3.connect(str(path), check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conns[key] = conn
+    return conn
 
 
 def rows(conn, sql, params=()):
