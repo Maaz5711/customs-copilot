@@ -41,6 +41,12 @@ export function AskHero() {
           <AgentPanel date={date} seed={seed} variant="hero" />
         </div>
 
+        <p role="note" className="mt-3 rounded-lg border border-line bg-surface-2/70 px-3 py-2.5 text-[13px] leading-snug text-ink-2 sm:text-sm">
+          <strong className="font-semibold text-ink">Public beta, unofficial.</strong> Not an FBR service, not endorsed by FBR, and not legal or customs advice.
+          Answers can be wrong: on real Chapter 85 import records it found the exact 8-digit code 44% of the time, and it says &ldquo;not sure&rdquo; instead of guessing.
+          Always confirm the code and duty with Pakistan Customs or a licensed customs agent. Do not type names, phone numbers or other personal data.
+        </p>
+
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2" aria-label="Example questions">
           {CHIPS.map((c) => (
             <button key={c} type="button" onClick={() => ask(c)} className="min-h-11 rounded-full border border-line bg-surface px-4 text-[14px] text-ink-2 transition-colors hover:border-gold hover:text-ink">{c}</button>

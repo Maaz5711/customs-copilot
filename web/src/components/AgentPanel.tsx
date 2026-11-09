@@ -74,7 +74,7 @@ export function AgentPanel({ date, seed, variant }: { date: string; seed: Seed; 
             />
           </Field>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            {hero ? <p className="text-sm text-ink-2">Rules as of <span className="num font-semibold text-ink">{date}</span> · <a href="#tool" className="underline-offset-2 hover:underline">change date</a></p> : (
+            {hero ? <p className="text-sm text-ink-2">Rules as of <span className="num font-semibold text-ink">{date}</span> · <a href="#tool" className="inline-flex min-h-11 items-center underline underline-offset-2">change date</a></p> : (
               <div className="flex flex-wrap items-center gap-2" aria-label="Examples">
                 <span className="text-sm text-ink-2">Try:</span>
                 {EXAMPLES.map((ex) => (

@@ -30,8 +30,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         <a href="#main" className="skip-link">Skip to content</a>
         <header className="site-header sticky top-0 z-40 border-b border-line bg-surface/85 backdrop-blur-md">
-          <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-3 sm:px-6">
-            <Link href="/" className="flex items-center gap-2 whitespace-nowrap font-display text-[16px] font-semibold text-ink sm:gap-2.5 sm:text-[17px]">
+          <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-1 px-3 sm:gap-2 sm:px-6">
+            <Link href="/" className="flex min-h-11 items-center gap-2 whitespace-nowrap font-display text-[15px] font-semibold text-ink sm:gap-2.5 sm:text-[17px]">
               <span className="inline-flex size-8 items-center justify-center rounded-lg bg-brand text-on-brand"><ShieldCheck size={18} aria-hidden="true" /></span>
               <span className="flex flex-col leading-tight">
                 Customs Copilot
@@ -42,8 +42,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <Link href="/#tool" className="hidden whitespace-nowrap rounded-lg px-3 py-2 text-ink-2 hover:bg-surface-2 hover:text-ink lg:inline-block">Tools</Link>
               <Link href="/#faq" className="hidden whitespace-nowrap rounded-lg px-3 py-2 text-ink-2 hover:bg-surface-2 hover:text-ink lg:inline-block">FAQ</Link>
               <Link href="/#contact" className="hidden whitespace-nowrap rounded-lg px-3 py-2 text-ink-2 hover:bg-surface-2 hover:text-ink md:inline-block">Contact</Link>
-              <Link href="/method" className="whitespace-nowrap rounded-lg px-2 py-2 text-ink-2 hover:bg-surface-2 hover:text-ink sm:px-3">How it works</Link>
-              <Link href="/security" className="whitespace-nowrap rounded-lg px-2 py-2 text-ink-2 hover:bg-surface-2 hover:text-ink sm:px-3">Privacy</Link>
+              <Link href="/method" className="inline-flex min-h-11 items-center whitespace-nowrap rounded-lg px-2 text-ink-2 hover:bg-surface-2 hover:text-ink sm:px-3">How it works</Link>
+              <Link href="/security" className="hidden min-h-11 items-center whitespace-nowrap rounded-lg px-2 text-ink-2 hover:bg-surface-2 hover:text-ink sm:inline-flex sm:px-3">Privacy</Link>
               <ThemeToggle />
               <Link href="/#ask" className="ml-1 hidden min-h-10 items-center whitespace-nowrap rounded-lg bg-brand px-4 text-[14px] font-semibold text-on-brand hover:opacity-90 sm:inline-flex">Find my duty</Link>
             </nav>
@@ -57,7 +57,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               Independent project, built to assist FBR and Pakistan Customs. Customs Copilot is not an FBR service, is not endorsed by FBR, and gives no legal or customs advice.
               Check with Pakistan Customs or a licensed customs agent before you import. Rules covered: FY2025-26 and FY2026-27.
             </p>
-            <p className="mt-2">Built from public FBR documents. <Link href="/method" className="underline">Sources and accuracy</Link> · <Link href="/security" className="underline">Privacy and security</Link> · <Link href="/#contact" className="underline">Contact</Link></p>
+            <p className="mt-2 flex flex-wrap items-center gap-x-1">Built from public FBR documents.
+              <Link href="/method" className="inline-flex min-h-11 items-center underline">Sources and accuracy</Link> ·
+              <Link href="/security" className="inline-flex min-h-11 items-center underline">Privacy and security</Link> ·
+              <Link href="/#contact" className="inline-flex min-h-11 items-center underline">Contact</Link></p>
             <p className="mt-2">Designed and developed by <span className="font-semibold text-ink">Maaz Ahmed</span>.</p>
           </div>
         </footer>

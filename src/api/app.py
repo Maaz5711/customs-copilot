@@ -10,7 +10,9 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
+import contextlib
 import os
+import threading
 import uuid
 
 from fastapi import FastAPI, HTTPException, Request
@@ -52,6 +54,19 @@ def create_app(service: AgentService | None = None, limiter: RateLimiter | None 
             wait = lim.check(ip, b)
             if wait is not None:
                 raise HTTPException(429, detail="Too many requests. Please wait a little and try again.", headers={"Retry-After": str(wait)})
+
+    # A rush of visitors must not crash the small server: at most N heavy requests run at once, the rest wait a little, then get a polite "busy" (503).
+    gates = {"lookup": threading.BoundedSemaphore(int(os.environ.get("API_MAX_LOOKUPS", "3"))),
+             "agent": threading.BoundedSemaphore(int(os.environ.get("API_MAX_AGENTS", "6")))}
+
+    @contextlib.contextmanager
+    def slot(kind: str):
+        if not gates[kind].acquire(timeout=20):
+            raise Busy("The service is busy right now. Please try again in a minute.")
+        try:
+            yield
+        finally:
+            gates[kind].release()
 
     def get_lookup():
         if lookup_fn is not None:
@@ -98,7 +113,8 @@ def create_app(service: AgentService | None = None, limiter: RateLimiter | None 
     def ask(body: AskIn, request: Request):
         limited(request, "agent", "agent_hour")
         try:
-            return scrub(svc.ask(body.question, body.date or _today()))
+            with slot("agent"):
+                return scrub(svc.ask(body.question, body.date or _today()))
         except Exception as e:
             raise fail(e, "ask") from None
 
@@ -108,18 +124,20 @@ def create_app(service: AgentService | None = None, limiter: RateLimiter | None 
         if not body.answers and not body.reply:
             raise HTTPException(422, detail="Please answer at least one question.")
         try:
-            return scrub(svc.answer(body.thread_id, body.answers, body.reply))
+            with slot("agent"):
+                return scrub(svc.answer(body.thread_id, body.answers, body.reply))
         except KeyError:
             raise HTTPException(404, detail="This conversation has expired. Please start again.") from None
         except Exception as e:
             raise fail(e, "answer") from None
 
-    def ndjson(events, where: str):
+    def ndjson(events, where: str, kind: str = "agent"):
         """Stream events as one JSON object per line. An error inside the stream becomes a final {'type': 'error'} event (the status line is already sent)."""
         def gen():
             try:
-                for ev in events:
-                    yield json.dumps(scrub(ev), ensure_ascii=False) + NL
+                with slot(kind):
+                    for ev in events:
+                        yield json.dumps(scrub(ev), ensure_ascii=False) + NL
             except KeyError:
                 yield json.dumps({"type": "error", "status": 404, "message": "This conversation has expired. Please start again."}) + NL
             except Exception as e:
@@ -143,7 +161,8 @@ def create_app(service: AgentService | None = None, limiter: RateLimiter | None 
     def lookup(body: LookupIn, request: Request):
         limited(request, "lookup")
         try:
-            return scrub(get_lookup()(body.query, body.date or _today(), body.k, body.chapter, body.cd_pct))
+            with slot("lookup"):
+                return scrub(get_lookup()(body.query, body.date or _today(), body.k, body.chapter, body.cd_pct))
         except Exception as e:
             raise fail(e, "lookup") from None
 
