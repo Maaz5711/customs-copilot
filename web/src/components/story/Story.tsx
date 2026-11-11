@@ -240,18 +240,22 @@ export function Story() {
                         {c.id === "bill" && (
                           <tr className="border-t-2 border-ink">
                             <th scope="row" className="pt-3 text-base">Total payable</th>
-                            <td className="num pt-3 text-right font-display text-xl font-semibold">PKR <CountUp to={EXAMPLE.total} active={active && pinned} delay={900} /></td>
+                            <td className="num whitespace-nowrap pt-3 text-right font-display text-xl font-semibold">PKR<CountUp to={EXAMPLE.total} active={active && pinned} delay={900} /></td>
                           </tr>
                         )}
                       </tbody>
                     </table>
                     {c.id === "sources" && (
-                      <ul className="mt-3 grid gap-1 border-t border-line pt-3 text-sm text-ink-2">
-                        <li className="font-semibold text-ink">Not verified</li>
-                        {EXAMPLE.unverified.map((u) => <li key={u}>· {u}</li>)}
-                      </ul>
+                      <>
+                        <ul className="story-unverified mt-3 grid gap-1 border-t border-line pt-3 text-sm text-ink-2">
+                          <li className="font-semibold text-ink">Not verified</li>
+                          {EXAMPLE.unverified.map((u) => <li key={u}>· {u}</li>)}
+                        </ul>
+                        {/* phones only: the same two caveats on one short line, so the card stays small */}
+                        <p className="story-unverified-inline mt-2 border-t border-line pt-2 text-[13px] text-ink-2"><span className="font-semibold text-ink">Not verified:</span> {EXAMPLE.unverified.join("; ")}.</p>
+                      </>
                     )}
-                    <p className="mt-3 text-xs text-ink-2">Real run of the tool: assessed value PKR {fmtPKR(EXAMPLE.value).replace(".00", "")}, {EXAMPLE.who}, rules as of {EXAMPLE.asOf}.</p>
+                    <p className={`mt-3 text-xs text-ink-2${c.id === "sources" ? " story-footnote" : ""}`}>Real run of the tool: assessed value PKR {fmtPKR(EXAMPLE.value).replace(".00", "")}, {EXAMPLE.who}, rules as of {EXAMPLE.asOf}.</p>
                   </div>
                 )}
 

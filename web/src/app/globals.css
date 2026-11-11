@@ -215,13 +215,21 @@ html.lenis, html.lenis body { height: auto; }
 .lenis [data-lenis-prevent] { overscroll-behavior: contain; }
 
 /* small or short screens: keep each chapter card inside the screen without inner scrolling */
+.story-unverified-inline { display: none; }
+/* phones: sit above the round back-to-top button so it never covers the card text */
+@media (max-width: 767px) { .story[data-mode="pinned"] .story-panels { inset: auto 0 4.25rem 0; } }
 @media (max-width: 767px), (max-height: 640px) {
-  .story[data-mode="pinned"] .story-panel { padding: .85rem 1rem; max-height: 60svh; }
+  /* the card must leave most of the animation visible: compact type and spacing, no repeated notes */
+  .story[data-mode="pinned"] .story-panel { padding: .65rem .9rem; max-height: 42svh; }
   .story[data-mode="pinned"] .story-panel[data-card="true"] .story-body { display: none; }
-  .story[data-mode="pinned"] .story-title { font-size: 1.65rem; margin-top: .25rem; }
-  .story[data-mode="pinned"] .story-card { margin-top: .55rem; padding: .5rem .8rem; }
-  .story[data-mode="pinned"] .story-row > * { padding-top: .22rem; padding-bottom: .22rem; }
-  .story[data-mode="pinned"] .story-card table { font-size: 14px; }
+  .story[data-mode="pinned"] .story-panel .hud-label { font-size: 11px; }
+  .story[data-mode="pinned"] .story-title { font-size: 1.35rem; line-height: 1.1; margin-top: .15rem; }
+  .story[data-mode="pinned"] .story-card { margin-top: .4rem; padding: .35rem .7rem; font-size: 13px; }
+  .story[data-mode="pinned"] .story-card p { line-height: 1.35; }
+  .story[data-mode="pinned"] .story-row > * { padding-top: .1rem; padding-bottom: .1rem; line-height: 1.3; }
+  .story[data-mode="pinned"] .story-card table { font-size: 13px; }
+  .story[data-mode="pinned"] .story-unverified, .story[data-mode="pinned"] .story-footnote { display: none; }
+  .story[data-mode="pinned"] .story-unverified-inline { display: block; }
 }
 
 
