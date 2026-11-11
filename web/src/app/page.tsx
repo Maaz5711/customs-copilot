@@ -19,7 +19,7 @@ export default function Home() {
         </div>
       </div>
       <Story />
-      <div className="mx-auto grid max-w-6xl gap-20 px-4 pb-8 pt-16 sm:px-6 sm:pt-20">
+      <div className="mx-auto grid max-w-6xl grid-cols-[minmax(0,1fr)] gap-20 px-4 pb-8 pt-16 sm:px-6 sm:pt-20">
         <WhySection />
         <ToolSections />
         <CoverageSection />
